@@ -2,7 +2,7 @@
 
 ## Introduction
 
-AttackMatrix is a Python module to interact with and explore MITRE's ATT&CK's matrices.
+AttackMatrix is a Python module to interact with and explore MITRE's ATT&CK® matrices.
 
 ## Features
 
@@ -42,7 +42,7 @@ Loaded matrices can be queried through multiple functions and will return a Pyth
 
 ## Comments and Suggestions
 
-If you would like to reach out with ideas for improvements or general feedback, please reach out to the [author](mailto:arnime <remove-and-replace> kpn-cert.nl).
+If you would like to reach out with ideas for improvements or general feedback, please reach out to the [author](mailto:arnime squiggly kpn-cert.nl).
 
 ## Known issues
 
