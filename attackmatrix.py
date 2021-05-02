@@ -104,7 +104,7 @@ async def query(request: Request,
         else:
             cache = loadCaches(options)
             jsonblob = dpath.util.get(cache, request.path_params['treepath'].strip('/'), separator='/')
-            categories = ('actors', 'malwares', 'subtechniques', 'tactics', 'techniques', 'tools')
+            categories = ('actors', 'malwares', 'mitigations', 'subtechniques', 'tactics', 'techniques', 'tools')
             try:
                 matrix, item, subitems = request.path_params['treepath'].split('/')
                 for category in jsonblob:
