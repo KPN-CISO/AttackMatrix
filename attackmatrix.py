@@ -3,7 +3,7 @@
 #
 # (c) 2021 Arnim Eijkhoudt (arnime <thingamajic> kpn-cert.nl), GPLv3
 #
-# Please note: the MITRE ATT&CK® framework  is a registered trademark
+# Please note: the MITRE ATT&CK® framework is a registered trademark
 # of MITRE. See https://attack.mitre.org/ for more information.
 #
 # I would like to thank MITRE for the permissive licence under which
@@ -103,8 +103,29 @@ async def query(request: Request,
             return dpath.util.get(Matrices, '/')
         else:
             cache = loadCaches(options)
-            return JSONResponse(dpath.util.get(cache, request.path_params['treepath'].strip('/'), separator='/'))
+            jsonblob = dpath.util.get(cache, request.path_params['treepath'].strip('/'), separator='/')
+            categories = ('actors', 'malwares', 'subtechniques', 'tactics', 'techniques', 'tools')
+            try:
+                matrix, item, subitems = request.path_params['treepath'].split('/')
+                for category in jsonblob:
+                    if category.lower() in categories:
+                        temp = {}
+                        for entry in jsonblob[category]:
+                            contents = dpath.util.get(cache, matrix + '/' + category + '/' + entry, separator='/')
+                            name = contents['name']
+                            description = contents['description']
+                            temp[entry] = {
+                                                        'name': name,
+                                                        'description': description,
+                                                       }
+                        jsonblob[category] = temp
+            except ValueError:
+                pass
+            #print(dpath.util.get(cache, request.path_params['Enterprise' + '/' + 'Subtechniques' + '/' + 'T1059.003'], separator='/'))
+            return JSONResponse(jsonblob)
+            #return JSONResponse(jsonblob)
     except KeyError:
+        raise
         return JSONResponse(content=json.dumps(None))
 
 
