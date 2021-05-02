@@ -121,11 +121,10 @@ async def query(request: Request,
                         jsonblob[category] = temp
             except ValueError:
                 pass
-            #print(dpath.util.get(cache, request.path_params['Enterprise' + '/' + 'Subtechniques' + '/' + 'T1059.003'], separator='/'))
+            # Remove empty dictionary keys
+            jsonblob = {k: v for k, v in jsonblob.items() if v}
             return JSONResponse(jsonblob)
-            #return JSONResponse(jsonblob)
     except KeyError:
-        raise
         return JSONResponse(content=json.dumps(None))
 
 
