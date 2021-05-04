@@ -77,6 +77,6 @@ Yes, I know the code could be cleaner and more efficient, particularly that horr
 
 ## Thanks
 
-- MITRE, obviously, for their outstanding work on and sharing of ATT&CK [MITRE® ATT&CK](https://attack.mitre.org)
-- D3.js' outstanding Javascript visualization/rendering library [D3.js](https://d3js.org)
-- dagre-d3, for making D3.js understandable enough for me :-) [dagre-d3](https://github.com/dagrejs/dagre-d3)
+- MITRE, obviously, for their outstanding work on and sharing of ATT&CK - [MITRE® ATT&CK](https://attack.mitre.org)
+- D3.js' outstanding Javascript visualization/rendering library - [D3.js](https://d3js.org)
+- dagre-d3, for making D3.js understandable enough for me! - [dagre-d3](https://github.com/dagrejs/dagre-d3)
