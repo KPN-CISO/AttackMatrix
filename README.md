@@ -73,4 +73,10 @@ If you would like to reach out with ideas for improvements or general feedback, 
 
 ## Known issues
 
-Yes, I know the code could be cleaner and more efficient, particularly the horrendous mess the PHP script is. I'm not a professional webdeveloper, okay!? :-)
+Yes, I know the code could be cleaner and more efficient, particularly that horrendous mess of a PHP script. I'm not a professional webdeveloper, okay!? :-)
+
+## Thanks
+
+- MITRE, obviously, for their outstanding work on and sharing of ATT&CK [MITRE® ATT&CK](https://attack.mitre.org)
+- D3.js' outstanding Javascript visualization/rendering library [D3.js](https://d3js.org)
+- dagre-d3, for making D3.js understandable enough for me :-) [dagre-d3](https://github.com/dagrejs/dagre-d3)
