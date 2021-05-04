@@ -105,25 +105,28 @@ async def query(request: Request,
             cache = loadCaches(options)
             jsonblob = dpath.util.get(cache, request.path_params['treepath'].strip('/'), separator='/')
             categories = ('actors', 'malwares', 'mitigations', 'subtechniques', 'tactics', 'techniques', 'tools')
-            try:
-                matrix, item, subitems = request.path_params['treepath'].split('/')
-                for category in jsonblob:
-                    if category.lower() in categories:
-                        temp = {}
-                        for entry in jsonblob[category]:
-                            contents = dpath.util.get(cache, matrix + '/' + category + '/' + entry, separator='/')
-                            name = contents['name']
-                            description = contents['description']
-                            temp[entry] = {
-                                                        'name': name,
-                                                        'description': description,
-                                                       }
-                        jsonblob[category] = temp
-            except ValueError:
-                pass
-            # Remove empty dictionary keys
-            jsonblob = {k: v for k, v in jsonblob.items() if v}
-            return JSONResponse(jsonblob)
+            matrix, category, entry = request.path_params['treepath'].strip('/').split('/')
+            name = jsonblob['name']
+            if isinstance(name, list):
+                name = ', '.join(name)
+            temp = {
+                'name': name,
+                'description': jsonblob['description'],
+            }
+            for category in jsonblob:
+                if category.lower() in categories:
+                    temp[category] = {}
+                    for entry in jsonblob[category]:
+                        name = cache[matrix][category][entry]['name']
+                        if isinstance(name, list):
+                            name = ', '.join(name)
+                        description = cache[matrix][category][entry]['description']
+                        temp[category][entry] = {
+                                        'name': name,
+                                        'description': description,
+                                      }
+            temp = {k: v for k, v in temp.items() if v}
+            return JSONResponse(temp)
     except KeyError:
         return JSONResponse(content=json.dumps(None))
 
@@ -286,14 +289,30 @@ def findActorOverlap(options, mitreID1, mitreID2):
             for key in keys:
                 for matrixname in cache.keys():
                     if cache[matrixname][overlapkey].get(key):
+                        name = cache[matrixname][overlapkey][key]['name'];
+                        if isinstance(name, list):
+                            name = ', '.join(cache[matrixname][overlapkey][key]['name'])
                         overlap[overlapkey][key] = {
-                            'name': cache[matrixname][overlapkey][key]['name'],
+                            'name': name,
                             'description': cache[matrixname][overlapkey][key]['description'],
                         }
     overlap['Actors'][mitreID1]['description'] = overlap['Actors'][mitreID1]['description'].strip()
     overlap['Actors'][mitreID1]['name'] = list(set(overlap['Actors'][mitreID1]['name']))
     overlap['Actors'][mitreID2]['description'] = overlap['Actors'][mitreID2]['description'].strip()
     overlap['Actors'][mitreID2]['name'] = list(set(overlap['Actors'][mitreID2]['name']))
+    if isinstance(overlap['Actors'][mitreID1]['name'], list):
+        overlap['Actors'][mitreID1]['name'] = ', '.join(overlap['Actors'][mitreID1]['name'])
+    if isinstance(overlap['Actors'][mitreID2]['name'], list):
+        overlap['Actors'][mitreID2]['name'] = ', '.join(overlap['Actors'][mitreID2]['name'])
+    matrices = overlap['Matrices']['name'];
+    matricesdesc = overlap['Matrices']['description']
+    matrixnames = []
+    for key in matrices:
+        matrixnames.append(key)
+    overlap['Matrices'] = {
+        'name': ', '.join(matrixnames),
+        'description': matricesdesc,
+    }
     if (overlapkeys.keys() & overlap.keys()):
         return overlap
     else:
@@ -318,6 +337,11 @@ def findTTPOverlap(options, TTPs=[]):
                     candidatecontent += cache[matrixname]['Actors'][candidate][overlapkey]
             if (len(candidatecontent) > 0) and all(ttp in candidatecontent for ttp in TTPs):
                 results[matrixname]['Actors'][candidate] = cache[matrixname]['Actors'][candidate]
+                name = cache[matrixname]['Actors'][candidate]['name']
+                if isinstance(name, list):
+                    results[matrixname]['Actors'][candidate]['name'] = ', '.join(cache[matrixname]['Actors'][candidate]['name'])
+                else:
+                    results[matrixname]['Actors'][candidate]['name'] = cache[matrixname]['Actors'][candidate]['name']
             for actor in results[matrixname]['Actors']:
                 for ttpkey in overlapkeys.keys():
                     if results[matrixname]['Actors'][actor].get(ttpkey):
@@ -326,8 +350,11 @@ def findTTPOverlap(options, TTPs=[]):
                         results[matrixname]['Actors'][actor][ttpkey] = {}
                         for ttp in ttps:
                             if cache[matrixname][ttpkey].get(ttp):
+                                name = cache[matrixname][ttpkey][ttp]['name']
+                                if isinstance(name, list):
+                                    name = ', '.join(name)
                                 results[matrixname]['Actors'][actor][ttpkey][ttp] = {
-                                    'name': cache[matrixname][ttpkey][ttp]['name'],
+                                    'name': name,
                                     'description': cache[matrixname][ttpkey][ttp]['description'],
                                 }
     for matrixname in cache.keys():
