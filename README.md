@@ -2,7 +2,7 @@
 
 ## Introduction
 
-AttackMatrix is a Python module to interact with and explore MITRE's ATT&CK® matrices.
+AttackMatrix is a Python module and PHP script to interact with and explore MITRE's ATT&CK® matrices.
 
 ## Features
 
