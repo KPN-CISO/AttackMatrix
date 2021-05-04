@@ -25,13 +25,22 @@ Loaded matrices can be queried through multiple functions and will return a Pyth
 
 ## Requirements
 
+### For the API
+
 1. `Python` 3.5+ (uses modern dictionary merging)
 2. `dpath` (usage is deprecated, requirement will be removed in future versions)
 3. `Uvicorn`
 4. `FastAPI`
 5. At least one MITRE ATT&CK® matrix
 
+### For the WebGrapher
+
+1. A PHP-enabled webserver (Apache, nginx, ...)
+2. `allow_furl_open` support enabled in the `php.ini` file: the script needs to be able to call the API endpoint
+
 ## Installation
+
+### For the API
 
 1. `git clone` the repository
 2. Install the dependencies: `pip3 install -r requirements.txt`
@@ -40,10 +49,16 @@ Loaded matrices can be queried through multiple functions and will return a Pyth
 5. Read the help: `./attackmatrix.py -h`
 6. Download, transform and cache at least one matrix (default: `Enterprise`) using `./attackmatrix.py -t ...`
 
+### For the WebGrapher
+
+1. `git clone` the repository
+2. Place the `attackmap.php`, `d3.v5.min.js` and `dagre-d3.min.js` in a webserver-accessible directory with PHP-support enabled
+3. Edit the `attackmap.php` file and change the `$api = '...'` URL. Please note: you can theoretically keep using the public AttackMatrix API (the `http://149.210...` host), but I reserve the right to block abuse, change the API endpoint functionality or take down the public API without prior notice.
+
 ## Comments and Suggestions
 
-If you would like to reach out with ideas for improvements or general feedback, please reach out to the [author](mailto:arnime squiggly kpn-cert.nl).
+If you would like to reach out with ideas for improvements or general feedback, please reach out to the [author](mailto:uforia@dhcp.net).
 
 ## Known issues
 
-Yes, the code could be cleaner and more efficient - I'm not a professional developer okay :-)
+Yes, I know the code could be cleaner and more efficient, particularly the horrendous mess the PHP script is. I'm not a professional webdeveloper, okay!? :-)
