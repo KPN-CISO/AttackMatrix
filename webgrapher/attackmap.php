@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <html>
 <head>
-<title>MITREÂ ATTACK Matrix Grapher</title>
+<title>MITRE ATT&CK Matrix Grapher</title>
 <script src="https://d3js.org/d3.v5.min.js" charset="utf-8"></script>
 <script src="dagre-d3.min.js"></script>
 <script src="jquery-1.9.1.min.js"></script>
