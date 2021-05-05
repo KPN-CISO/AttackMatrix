@@ -110,23 +110,38 @@ async def query(request: Request,
             if isinstance(name, list):
                 name = ', '.join(name)
             temp = {
-                'name': name,
-                'description': jsonblob['description'],
+                entry: {
+                    matrix: {
+                        category: {},
+                    },
+                },
             }
-            for category in jsonblob:
-                if category.lower() in categories:
-                    temp[category] = {}
-                    for entry in jsonblob[category]:
-                        name = cache[matrix][category][entry]['name']
+            results = {
+                entry: {
+                    'name': name,
+                    'description': jsonblob['description'],
+                    matrix: {},
+                },
+            }
+            for xcategory in jsonblob:
+                if xcategory.lower() in categories:
+                    temp[entry][matrix][xcategory] = {}
+                    for xentry in jsonblob[xcategory]:
+                        name = cache[matrix][xcategory][xentry]['name']
                         if isinstance(name, list):
                             name = ', '.join(name)
-                        description = cache[matrix][category][entry]['description']
-                        temp[category][entry] = {
+                        description = cache[matrix][xcategory][xentry]['description']
+                        temp[entry][matrix][xcategory][xentry] = {
                                         'name': name,
                                         'description': description,
                                       }
-            temp = {k: v for k, v in temp.items() if v}
-            return JSONResponse(temp)
+            # Remove my own category as a subcategory
+            del temp[entry][matrix][category]
+            # Build the final results and delete empty dictionary keys
+            for xcategory in temp[entry][matrix]:
+                if temp[entry][matrix][xcategory]:
+                    results[entry][matrix][xcategory] = temp[entry][matrix][xcategory]
+            return JSONResponse(results)
     except KeyError:
         return JSONResponse(content=json.dumps(None))
 
@@ -425,7 +440,7 @@ def searchMatrix(options, params, matrixname):
 
 
 def unfoldKeys(options, cache, matrixname, entitytype, entity):
-    unfoldFields = ['Actors', 'Malwares', 'Mitigations', 'Subtechniques', 'Techniques']
+    unfoldFields = ['Actors', 'Malwares', 'Mitigations', 'Subtechniques', 'Techniques', 'Tools']
     results = {
         'name': cache[matrixname][entitytype][entity]['name'],
         'description': cache[matrixname][entitytype][entity]['description'],
