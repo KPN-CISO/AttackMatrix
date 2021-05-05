@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 #
 # (c) 2021 Arnim Eijkhoudt (arnime <thingamajic> kpn-cert.nl), GPLv3
@@ -11,6 +12,7 @@
 #
 
 import argparse
+import collections
 import dpath.util
 import logging
 import json
@@ -105,7 +107,10 @@ async def query(request: Request,
             cache = loadCaches(options)
             jsonblob = dpath.util.get(cache, request.path_params['treepath'].strip('/'), separator='/')
             categories = ('actors', 'malwares', 'mitigations', 'subtechniques', 'tactics', 'techniques', 'tools')
-            matrix, category, entry = request.path_params['treepath'].strip('/').split('/')
+            try:
+                matrix, category, entry = request.path_params['treepath'].strip('/').split('/')
+            except ValueError:
+                return dpath.util.get(cache, request.path_params['treepath'].strip('/'), separator='/')
             name = jsonblob['name']
             if isinstance(name, list):
                 name = ', '.join(name)
@@ -175,26 +180,25 @@ async def deprecatedSearch(request: Request,
         return search(options, params, matrix)
 
 
-@app.get('/api/actoroverlap/{mitreID1}/{mitreID2}', tags=['deprecated'])
-async def deprecatedActorOverlap(request: Request,
-                                 mitreID1: str,
-                                 mitreID2: str,
-                                 token: Optional[str] = None):
-    if options.token:
-        if token != options.token:
-            raise HTTPException(status_code=403, detail='Missing or incorrect token')
-    return findActorOverlap(options, mitreID1.rstrip('/'), mitreID2.rstrip('/'))
-
-
 @app.get('/api/actoroverlap/', tags=['actoroverlap'])
 async def actorOverlap(request: Request,
-                       actor1: str,
-                       actor2: str,
+                       actor: list = Query([]),
                        token: Optional[str] = None):
     if options.token:
         if token != options.token:
             raise HTTPException(status_code=403, detail='Missing or incorrect token')
-    return findActorOverlap(options, actor1, actor2)
+    return findActorOverlap(options, actor)
+
+
+@app.get('/api/actoroverlap/{actor:path}', tags=['deprecated'])
+async def deprecatedActorOverlap(request: Request,
+                                 actor: str,
+                                 token: Optional[str] = None):
+    if options.token:
+        if token != options.token:
+            raise HTTPException(status_code=403, detail='Missing or incorrect token')
+    Actors = request.path_params['actor'].rstrip('/').split('/')
+    return findActorOverlap(options, Actors)
 
 
 @app.get('/api/ttpoverlap/', tags=['ttpoverlap'])
@@ -218,16 +222,8 @@ async def deprecatedTTPOverlap(request: Request,
     return findTTPOverlap(options, TTPs)
 
 
-def findActorOverlap(options, mitreID1, mitreID2):
-    actor1, actor2 = {}, {}
+def findActorOverlap(options, Actors=[]):
     cache = loadCaches(options)
-    for matrixname in cache.keys():
-        if options.verbose:
-            logging.info('Searching ' + matrixname + ' for ' + mitreID1 + ' and ' + mitreID2)
-        if cache[matrixname]['Actors'].get(mitreID1.rstrip('/')):
-            actor1 = {**actor1, **{matrixname: {'Actors': cache[matrixname]['Actors'][mitreID1]}}}
-        if cache[matrixname]['Actors'].get(mitreID2.rstrip('/')):
-            actor2 = {**actor2, **{matrixname: {'Actors': cache[matrixname]['Actors'][mitreID2]}}}
     overlapkeys = {
         'Malwares': {},
         'Mitigations': {},
@@ -235,103 +231,74 @@ def findActorOverlap(options, mitreID1, mitreID2):
         'Techniques': {},
         'Tools': {},
     }
-    overlap = {
-        'Actors': {
-            mitreID1: {
-                'name': [],
-                'description': '',
-            },
-            mitreID2: {
-                'name': [],
-                'description': '',
-            },
-        },
-        'Malwares': {},
-        'Matrices': {},
-        'Mitigations': {},
-        'Subtechniques': {},
-        'Techniques': {},
-        'Tools': {},
-    }
-    # Pivot the matrix names into a single list
-    overlap['Matrices'] = {
-        'name': set(list(actor1.keys())).union(set(list(actor2.keys()))),
-        'description': 'List of ATT&CK® matrices in which the actors have been found',
-    }
-    actor1map = {
+    results = {
+        'Actors': {},
         'Malwares': {},
         'Mitigations': {},
         'Subtechniques': {},
         'Techniques': {},
         'Tools': {},
     }
-    actor2map = {
-        'Malwares': {},
-        'Mitigations': {},
-        'Subtechniques': {},
-        'Techniques': {},
-        'Tools': {},
-    }
-    for matrixname in overlap['Matrices']['name']:
-        if actor1.get(matrixname):
-            for overlapkey in overlapkeys.keys():
-                if actor1[matrixname]['Actors'].get(overlapkey):
-                    for entry in actor1[matrixname]['Actors'][overlapkey]:
-                        if not entry in actor1map[overlapkey]:
-                            actor1map[overlapkey][entry] = {}
-            for name in actor1[matrixname]['Actors']['name']:
-                overlap['Actors'][mitreID1]['name'].append(name)
-            if actor1[matrixname]['Actors']['description'] not in overlap['Actors'][mitreID1]['description']:
-                overlap['Actors'][mitreID1]['description'] += actor1[matrixname]['Actors']['description'].strip()+' '
-        if actor2.get(matrixname):
-            for overlapkey in overlapkeys.keys():
-                if actor2[matrixname]['Actors'].get(overlapkey):
-                    for entry in actor2[matrixname]['Actors'][overlapkey]:
-                        if not entry in actor2map[overlapkey]:
-                            actor2map[overlapkey][entry] = {}
-            for name in actor2[matrixname]['Actors']['name']:
-                overlap['Actors'][mitreID2]['name'].append(name)
-            if actor2[matrixname]['Actors']['description'] not in overlap['Actors'][mitreID2]['description']:
-                overlap['Actors'][mitreID2]['description'] += actor2[matrixname]['Actors']['description'].strip()+' '
-    for overlapkey in overlapkeys.keys():
-        overlap[overlapkey] = [entry for entry in actor1map[overlapkey] if entry in actor2map[overlapkey]]
-        if len(overlap[overlapkey]) == 0:
-            del overlap[overlapkey]
-        else:
-            keys = overlap[overlapkey]
-            del overlap[overlapkey]
-            overlap[overlapkey] = {}
-            for key in keys:
-                for matrixname in cache.keys():
-                    if cache[matrixname][overlapkey].get(key):
-                        name = cache[matrixname][overlapkey][key]['name'];
-                        if isinstance(name, list):
-                            name = ', '.join(cache[matrixname][overlapkey][key]['name'])
-                        overlap[overlapkey][key] = {
-                            'name': name,
-                            'description': cache[matrixname][overlapkey][key]['description'],
-                        }
-    overlap['Actors'][mitreID1]['description'] = overlap['Actors'][mitreID1]['description'].strip()
-    overlap['Actors'][mitreID1]['name'] = list(set(overlap['Actors'][mitreID1]['name']))
-    overlap['Actors'][mitreID2]['description'] = overlap['Actors'][mitreID2]['description'].strip()
-    overlap['Actors'][mitreID2]['name'] = list(set(overlap['Actors'][mitreID2]['name']))
-    if isinstance(overlap['Actors'][mitreID1]['name'], list):
-        overlap['Actors'][mitreID1]['name'] = ', '.join(overlap['Actors'][mitreID1]['name'])
-    if isinstance(overlap['Actors'][mitreID2]['name'], list):
-        overlap['Actors'][mitreID2]['name'] = ', '.join(overlap['Actors'][mitreID2]['name'])
-    matrices = overlap['Matrices']['name'];
-    matricesdesc = overlap['Matrices']['description']
-    matrixnames = []
-    for key in matrices:
-        matrixnames.append(key)
-    overlap['Matrices'] = {
-        'name': ', '.join(matrixnames),
-        'description': matricesdesc,
-    }
-    if (overlapkeys.keys() & overlap.keys()):
-        return overlap
-    else:
-        return
+    for matrixname in cache.keys():
+        for mitreID in Actors:
+            if options.verbose:
+                logging.info('Searching ' + matrixname + ' for ' + mitreID)
+            if mitreID in cache[matrixname]['Actors'].keys():
+                if mitreID not in results['Actors']:
+                    results['Actors'][mitreID] = {}
+                if matrixname not in results['Actors'][mitreID]:
+                    results['Actors'][mitreID][matrixname] = {}
+                results['Actors'][mitreID][matrixname] = {
+                        'name': matrixname,
+                        'description': Matrices[matrixname]['name'],
+                }
+    allttps = {}
+    for actor in results['Actors']:
+        for matrixname in Matrices:
+            if matrixname in results['Actors'][actor]:
+                for overlapkey in overlapkeys:
+                    if overlapkey in cache[matrixname]['Actors'][actor]:
+                        if overlapkey not in allttps:
+                            allttps[overlapkey] = {}
+                        if len(cache[matrixname]['Actors'][actor][overlapkey])>0:
+                            for candidate in cache[matrixname]['Actors'][actor][overlapkey]:
+                                name = cache[matrixname][overlapkey][candidate]['name']
+                                if isinstance(name, list):
+                                    name = (', '.join(name)).encode('utf-8')
+                                description = cache[matrixname][overlapkey][candidate]['description'].encode('utf-8')
+                                allttps[overlapkey][candidate] = {
+                                    'name': name,
+                                    'description': description,
+                                }
+    ttplist = []
+    for overlapkey in allttps:
+        for ttp in allttps[overlapkey]:
+            for actor in results['Actors']:
+                for matrixname in Matrices:
+                    if matrixname in results['Actors'][actor]:
+                        if ttp in cache[matrixname]['Actors'][actor][overlapkey]:
+                            ttplist.append(matrixname+"->"+overlapkey+"->"+ttp)
+    shared = collections.Counter(ttplist)
+    ttpoverlap = [k for k, v in shared.items() if v == len(results['Actors'])]
+    ttpset = {}
+    for actor in results['Actors']:
+        for ttp in ttpoverlap:
+            matrixname, overlapkey, ttpid = ttp.split('->')
+            if overlapkey not in ttpset:
+                ttpset[overlapkey] = {}
+            ttpset[overlapkey][ttpid] = allttps[overlapkey][ttpid]
+            if not overlapkey in results['Actors'][actor]:
+                results['Actors'][actor][overlapkey] = {}
+            results['Actors'][actor][overlapkey][ttpid] = ttpset[overlapkey][ttpid]
+            name = cache[matrixname]['Actors'][actor]['name']
+            if isinstance(name, list):
+                name = ', '.join(name)
+            else:
+                name = ''.join(name)
+            description = ''.join(cache[matrixname]['Actors'][actor]['description'])
+        results['Actors'][actor]['name'] = name
+        results['Actors'][actor]['description'] = description
+    return {k: v for k, v in results.items() if len(v)>0}
 
 
 def findTTPOverlap(options, TTPs=[]):

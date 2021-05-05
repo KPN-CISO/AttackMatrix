@@ -81,18 +81,22 @@ if ($q === "ttpoverlap") {
   }
 }
 if ($q === "actoroverlap") {
-  $actor1 = $_GET['actor1'];
-  $actor2 = $_GET['actor2'];
-  if (empty($actor1) or empty($actor2)) {
+  $actor = $_GET['actor'];
+  $actors = explode(',', $actor);
+  if (count($actors) < 2) {
     echo "<body>";
-    echo "<b>Incorrect usage! Choose at least two actors!<b/>";
+    echo "<b>Incorrect usage! Choose at least two Actors!<b/>";
     echo "</body></html>";
     die();
   } else {
-    $query = $api . '/actoroverlap/?actor1=' . $actor1 . '&actor2=' . $actor2;
+    $query = $api . '/actoroverlap/?actor=' . implode('&actor=', $actors);
   }
 }
-$json = file_get_contents($query);
+try {
+  $json = file_get_contents($query);
+} catch (Exception $exception) {
+  die("$exception");
+}
 $obj = json_decode($json, true);
 if ($obj == "null") {
   echo "Empty result set: there is no <b>" . $id . "</b> in the <b>" . $cat . "</b> category in the <b>" . $matrix . "</b> matrix!";

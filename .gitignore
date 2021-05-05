@@ -30,6 +30,7 @@ wheels/
 .installed.cfg
 *.egg
 *.json
+attackmatrix.log
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
