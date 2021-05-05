@@ -28,7 +28,7 @@ The WebGrapher offers the same functionality, but turns the JSON output from the
 - exploration of the *Enterprise* ATT&CK matrix to find information about the *Actor* *G0005*:
   - [https://.../attackmap.php?q=explore&matrix=Enterprise&cat=Actors&id=G0005](https://www.valethosting.net/~penguin/attackmap/attackmap.php?q=explore&matrix=Enterprise&cat=Actors&id=G0005)
 - finding the overlapping TTPs (*Malwares, Mitigations, Subtechniques, Techniques and Tools*) for the *actors G0064* and *G0050*. Returns a list of *Actors*, a list of *matrices* they were  found in, and only the *TTPs* that overlapped (with their names/descriptions):
-  - [https://.../attackmap.php?q=actoroverlap&actor1=G0064&actor2=G0050](https://www.valethosting.net/~penguin/attackmap/attackmap.php?q=actoroverlap&actor1=G0064&actor2=G0050)
+  - [https://.../attackmap.php?q=actoroverlap&actor=G0064,G0050](https://www.valethosting.net/~penguin/attackmap/attackmap.php?q=actoroverlap&actor=G0064,G0050)
 - finding all actors that have a specific set of TTPs (*Malwares, Subtechniques, Techniques and Tools*). The number of TTPs is variable, i.e.: *1 ... n* fields can be given, separated by a comma (*this differs from the API endpoint call!)*.  Returns the matching *Actors* with all of their ATT&CK entity  types (including names/descriptions):
   - [https://.../attackmap.php?q=ttpoverlap&ttp=S0002,S0008,T1560.001](https://www.valethosting.net/~penguin/attackmap/attackmap.php?q=ttpoverlap&ttp=S0002,S0008,T1560.001)
 - **Note:** searching is not yet implemented!
