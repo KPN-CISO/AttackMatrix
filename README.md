@@ -78,7 +78,7 @@ The WebGrapher offers the same functionality, but turns the JSON output from the
 
 ## Comments and Suggestions
 
-If you would like to reach out with ideas for improvements or general feedback, please reach out to the [author](mailto:uforia@dhcp.net).
+If you have ideas for improvements or general feedback, please reach out to the [author](mailto:uforia@dhcp.net).
 
 ## Known issues
 
