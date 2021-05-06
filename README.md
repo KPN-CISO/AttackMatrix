@@ -32,7 +32,7 @@ The API offers an endpoint where loaded matrices can be queried through multiple
 - finding all actors that have a specific set of TTPs (*Malwares, Subtechniques, Techniques and Tools*). The number of TTPs is variable, i.e.: *1 ... n* fields can be given.  Returns the matching *Actors* with all of their ATT&CK entity  types (including names/descriptions):
   - http://.../api/ttpoverlap/?ttp=S0002&ttp=S0008&ttp=T1560.001
 
-The WebGrapher offers the same functionality, but turns the JSON output from the API into a human-readable D3.js relationship diagrams. The JSON examples above can be visualized as follows:
+The WebGrapher offers the same functionality, but turns the JSON output from the API into a human-readable D3.js relationship diagram. The JSON examples above can be visualized as follows:
 
 - exploration of the *Enterprise* ATT&CK matrix to find information about the *Actor* *G0005*:
   - [https://.../attackmap.php?q=explore&matrix=Enterprise&cat=Actors&id=G0005](https://www.valethosting.net/~penguin/attackmap/attackmap.php?q=explore&matrix=Enterprise&cat=Actors&id=G0005)
