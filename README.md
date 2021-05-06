@@ -4,6 +4,15 @@
 
 AttackMatrix is a Python module and PHP script to interact with and explore MITRE's ATT&CK® matrices.
 
+## Licensing
+
+- AttackMatrix and WebGrapher: GPLv3
+- [https://d3js.org](D3.js): BSD
+- [https://github.com/dagrejs/dagre-d3](dagre-d3): MIT
+- [https://pypi.org/project/dpath/](dpath): MIT
+- [https://jquery.com/](jQuery): MIT
+- [https://github.com/jaz303/tipsy](tipsy): MIT
+
 ## Features
 
 AttackMatrix can be:
