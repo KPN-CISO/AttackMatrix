@@ -27,7 +27,7 @@ from config import settings as options
 from config.matrixtable import Matrices
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse, RedirectResponse
-from typing import List, Optional
+from typing import Optional
 
 
 tags_metadata = [
@@ -279,7 +279,8 @@ def findActorOverlap(options, Actors=[]):
                         if ttp in cache[matrixname]['Actors'][actor][overlapkey]:
                             ttplist.append(matrixname+"->"+overlapkey+"->"+ttp)
     shared = collections.Counter(ttplist)
-    ttpoverlap = [k for k, v in shared.items() if v == len(results['Actors'])]
+    ttpoverlap = [k for k, v in shared.items() if v > 1]
+    print(ttpoverlap)
     ttpset = {}
     for actor in results['Actors']:
         for ttp in ttpoverlap:
