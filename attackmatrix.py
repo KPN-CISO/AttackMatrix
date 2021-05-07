@@ -245,7 +245,7 @@ def findActorOverlap(options, Actors=[]):
                 description = cache[matrixname]['Actors'][mitreID]['description']
                 if mitreID not in results['Actors']:
                     results['Actors'][mitreID] = {
-                            'name': matrixname,
+                            'name': name,
                             'description': description,
                             'Matrices': {},
                     }
@@ -279,29 +279,44 @@ def findActorOverlap(options, Actors=[]):
                 for matrixname in Matrices:
                     if matrixname in results['Actors'][actor]['Matrices']:
                         if ttp in cache[matrixname]['Actors'][actor][overlapkey]:
-                            ttplist.append(matrixname+"->"+overlapkey+"->"+ttp)
+                            ttplist.append(ttp)
     shared = collections.Counter(ttplist)
-    ttpoverlap = [k for k, v in shared.items() if v > 0]
-    print(ttpoverlap)
-    ttpset = {}
+    ttpoverlap = [k for k, v in shared.items() if v == len(results['Actors'])]
     for actor in results['Actors']:
-        for ttp in ttpoverlap:
-            matrixname, overlapkey, ttpid = ttp.split('->')
-            if overlapkey not in ttpset:
-                ttpset[overlapkey] = {}
-            ttpset[overlapkey][ttpid] = allttps[overlapkey][ttpid]
-            if not overlapkey in results['Actors'][actor]:
-                results['Actors'][actor][overlapkey] = {}
-            results['Actors'][actor][overlapkey][ttpid] = ttpset[overlapkey][ttpid]
-            name = cache[matrixname]['Actors'][actor]['name']
+        for matrix in results['Actors'][actor]['Matrices']:
+            name = ''.join(cache[matrix]['Actors'][actor]['name'])
             if isinstance(name, list):
                 name = ', '.join(name)
             else:
                 name = ''.join(name)
-            description = ''.join(cache[matrixname]['Actors'][actor]['description'])
-        results['Actors'][actor]['name'] = name
-        results['Actors'][actor]['description'] = description
-    return {k: v for k, v in results.items() if len(v)>0}
+            description = ''.join(cache[matrix]['Actors'][actor]['description'])
+    for actor in results['Actors']:
+        ttps = {}
+        for ttpid in ttpoverlap:
+            name = set()
+            description = set()
+            for matrix in Matrices:
+                for overlapkey in overlapkeys:
+                    if overlapkey not in ttps:
+                        ttps[overlapkey] = {}
+                    if ttpid in cache[matrix][overlapkey]:
+                        ttpname = cache[matrix][overlapkey][ttpid]['name']
+                        if isinstance(ttpname, list):
+                            name.add(', '.join(ttpname))
+                        else:
+                            name.add(ttpname)
+                        description.add(cache[matrix][overlapkey][ttpid]['description'])
+                        ttpname = ''.join(name)
+                        ttpdescription = ''.join(description)
+                        ttps[overlapkey][ttpid] = {
+                            'name': str(ttpname),
+                            'description': str(ttpdescription),
+                        }
+        for overlapkey in overlapkeys:
+            if not bool(ttps[overlapkey]):
+                del ttps[overlapkey]
+        results['Actors'][actor].update(ttps)
+    return {k: v for k, v in results.items() if v}
 
 
 def findTTPOverlap(options, TTPs=[]):
