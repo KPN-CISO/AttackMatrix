@@ -306,15 +306,16 @@ def findActorOverlap(options, Actors=[]):
                         else:
                             name.add(ttpname)
                         description.add(cache[matrix][overlapkey][ttpid]['description'])
-                        ttpname = ''.join(name)
+                        ttpname = ', '.join(name)
                         ttpdescription = ''.join(description)
                         ttps[overlapkey][ttpid] = {
-                            'name': str(ttpname),
-                            'description': str(ttpdescription),
+                            'name': ttpname,
+                            'description': ttpdescription,
                         }
         for overlapkey in overlapkeys:
             if not bool(ttps[overlapkey]):
                 del ttps[overlapkey]
+    for actor in results['Actors']:
         results['Actors'][actor].update(ttps)
     return {k: v for k, v in results.items() if v}
 
