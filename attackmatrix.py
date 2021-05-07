@@ -233,11 +233,6 @@ def findActorOverlap(options, Actors=[]):
     }
     results = {
         'Actors': {},
-        'Malwares': {},
-        'Mitigations': {},
-        'Subtechniques': {},
-        'Techniques': {},
-        'Tools': {},
     }
     for matrixname in cache.keys():
         for mitreID in Actors:
@@ -286,7 +281,8 @@ def findActorOverlap(options, Actors=[]):
                         if ttp in cache[matrixname]['Actors'][actor][overlapkey]:
                             ttplist.append(matrixname+"->"+overlapkey+"->"+ttp)
     shared = collections.Counter(ttplist)
-    ttpoverlap = [k for k, v in shared.items() if v > 1]
+    ttpoverlap = [k for k, v in shared.items() if v > 0]
+    print(ttpoverlap)
     ttpset = {}
     for actor in results['Actors']:
         for ttp in ttpoverlap:
