@@ -255,6 +255,8 @@ def findActorOverlap(options, Actors=[]):
                             'description': Matrices[matrixname]['name'],
                     }
     allttps = {}
+    if len(Actors) != len(results['Actors']):
+        return JSONResponse(content=json.dumps(None))
     for actor in results['Actors']:
         for matrixname in Matrices:
             if matrixname in results['Actors'][actor]['Matrices']:
