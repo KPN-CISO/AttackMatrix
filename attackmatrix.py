@@ -133,14 +133,20 @@ async def query(request: Request,
                             if len(cache[matrix][category][entry][cat]) > 0:
                                 results[matrix][category][entry][cat] = {}
                         for ttp in cache[matrix][category][entry][cat]:
-                            name = cache[matrix][cat][ttp]['name']
-                            if isinstance(name, list):
-                                name = ', '.join(name)
-                            description = cache[matrix][cat][ttp]['description']
-                            results[matrix][category][entry][cat][ttp] = {
-                                'name': name,
-                                'description': description,
-                            }
+                            if 'name' not in cache[matrix][cat][ttp]:
+                                results[matrix][category][entry][cat][ttp] = {
+                                    'name': ttp,
+                                    'description': '*** DEPRECATED OR REVOKED ***',
+                                }
+                            else:
+                                name = cache[matrix][cat][ttp]['name']
+                                if isinstance(name, list):
+                                    name = ', '.join(name)
+                                description = cache[matrix][cat][ttp]['description']
+                                results[matrix][category][entry][cat][ttp] = {
+                                    'name': name,
+                                    'description': description,
+                                }
             elif category:
                 results[matrix][category] = {}
                 for entry in cache[matrix][category]:
