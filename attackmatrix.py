@@ -855,7 +855,10 @@ if __name__ == "__main__":
                 matrices = loadCaches(options)
                 pprint.pprint(matrices[options.matrix])
             else:
-                parser.print_help()
+                if cachefile.exists() and not options.force:
+                    print('The cachefile ' + cachefile.name + ' already exists, use the \'-f\' option to overwrite!')
+                else:
+                    parser.print_help()
     else:
         try:
             port = int(options.port)
