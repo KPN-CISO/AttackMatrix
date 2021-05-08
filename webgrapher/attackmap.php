@@ -57,16 +57,16 @@ if (empty($q)) {
 }
 $api = 'http://149.210.137.179:8008/api';
 if ($q === "explore") {
-  if (isset($_GET['matrix'])) $matrix = $_GET['matrix'];
-  if (isset($_GET['cat'])) $cat = $_GET['cat'];
-  if (isset($_GET['id'])) $id = $_GET['id'];
-  if (empty($matrix) or empty($cat) or empty($id)) {
-    echo "<body>";
-    echo "<b>Incorrect usage!</b>";
-    echo "</body></html>";
-    die();
+  $query = $api .= "/explore";
+  if (isset($_GET['matrix'])) {
+    $query .= '/' . $_GET['matrix'];
   }
-  $query = $api . '/explore/' . $matrix . '/' . $cat . '/' . $id;
+  if (isset($_GET['cat'])) {
+    $query .= '/' . $_GET['cat'];
+  }
+  if (isset($_GET['id'])) {
+    $query .= '/' . $_GET['id'];
+  }
 }
 if ($q === "ttpoverlap") {
   $ttp = $_GET['ttp'];
@@ -119,23 +119,28 @@ var tooltips = {};
 function emitGraph($parent=0, $key, $value) {
   $tooltips = array('name', 'description', 'subtechnique_of');
   if (!in_array($key, $tooltips)) {
-    echo 'g.setNode("' . $key . '", { style: "fill: #aaffaa" });';
+    $keysafe = json_encode($key);
+    echo 'g.setNode(' . $keysafe . ', { style: "fill: #aaffaa" });';
     echo "\n";
   }
   if (!in_array($key, $tooltips)) {
     if ($parent!==0) {
-      echo 'g.setEdge("' . $parent . '", "' . $key . '", { curve: d3.curveBasis });';
+      $parentsafe = json_encode($parent);
+      $keysafe = json_encode($key);
+      echo 'g.setEdge(' . $parentsafe . ', ' . $keysafe . ', { curve: d3.curveBasis });';
       echo "\n";
     }
   }
   if ($key === 'description') {
     $description = json_encode($value);
     $short = str_replace("\n", "", (implode(' ', array_slice(explode(' ', $value), 0, 8)) . "..."));
-    echo "tooltips[\"" . $short . "\"] = { description: " . $description . " };";
+    $shortsafe = json_encode($short);
+    $parentsafe = json_encode($parent);
+    echo 'tooltips[' . $shortsafe . '] = { description: ' . $description . ' };';
     echo "\n";
-    echo 'g.setNode("' . $short . '", { style: "fill: #aaffaa" });';
+    echo 'g.setNode(' . $shortsafe . ', { style: "fill: #aaffaa" });';
     echo "\n";
-    echo 'g.setEdge("' . $parent . '", "' . $short . '", { curve: d3.curveBasis });';
+    echo 'g.setEdge(' . $parentsafe . ', ' . $shortsafe . ', { curve: d3.curveBasis });';
     echo "\n";
   }
   if (is_array($value)) {
