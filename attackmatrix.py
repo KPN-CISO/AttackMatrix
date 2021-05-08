@@ -133,7 +133,7 @@ async def query(request: Request,
                             if len(cache[matrix][category][entry][cat]) > 0:
                                 results[matrix][category][entry][cat] = {}
                         for ttp in cache[matrix][category][entry][cat]:
-                            if 'name' not in cache[matrix][cat][ttp]:
+                            if ttp not in cache[matrix][cat]:
                                 results[matrix][category][entry][cat][ttp] = {
                                     'name': ttp,
                                     'description': '*** DEPRECATED OR REVOKED ***',
