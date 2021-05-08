@@ -13,7 +13,7 @@
 
 import argparse
 import collections
-import dpath.util
+import itertools
 import logging
 import json
 import pathlib
@@ -102,52 +102,65 @@ async def query(request: Request,
             raise HTTPException(status_code=403, detail='Missing or incorrect token')
     try:
         if not request.path_params['treepath']:
-            return dpath.util.get(Matrices, '/')
+            return JSONResponse(Matrices)
         else:
             cache = loadCaches(options)
-            jsonblob = dpath.util.get(cache, request.path_params['treepath'].strip('/'), separator='/')
-            categories = ('actors', 'malwares', 'mitigations', 'subtechniques', 'tactics', 'techniques', 'tools')
             try:
-                matrix, category, entry = request.path_params['treepath'].strip('/').split('/')
+                default = [''] * 3
+                matrix, category, entry, *_ = itertools.chain(request.path_params['treepath'].strip('/').split('/'), default)
             except ValueError:
-                return dpath.util.get(cache, request.path_params['treepath'].strip('/'), separator='/')
-            name = jsonblob['name']
-            if isinstance(name, list):
-                name = ', '.join(name)
-            temp = {
-                entry: {
-                    matrix: {
-                        category: {},
-                    },
-                },
-            }
+                return JSONResponse(content=json.dumps(None))
+            categories = ('Actors', 'Malwares', 'Mitigations', 'Subtechniques', 'Tactics', 'Techniques', 'Tools')
             results = {
-                entry: {
-                    'name': name,
-                    'description': jsonblob['description'],
-                    matrix: {},
+                matrix: {
+                    'name': Matrices[matrix]['name'],
+                    'description': Matrices[matrix]['description'],
                 },
             }
-            for xcategory in jsonblob:
-                if xcategory.lower() in categories:
-                    temp[entry][matrix][xcategory] = {}
-                    for xentry in jsonblob[xcategory]:
-                        name = cache[matrix][xcategory][xentry]['name']
-                        if isinstance(name, list):
-                            name = ', '.join(name)
-                        description = cache[matrix][xcategory][xentry]['description']
-                        temp[entry][matrix][xcategory][xentry] = {
-                                        'name': name,
-                                        'description': description,
-                                      }
-            # Remove my own category as a subcategory
-            del temp[entry][matrix][category]
-            # Build the final results and delete empty dictionary keys
-            for xcategory in temp[entry][matrix]:
-                if temp[entry][matrix][xcategory]:
-                    results[entry][matrix][xcategory] = temp[entry][matrix][xcategory]
+            if entry:
+                results[matrix][category] = {}
+                results[matrix][category][entry] = {}
+                for cat in cache[matrix][category][entry]:
+                    if cat in categories:
+                        if cat not in results[matrix][category][entry]:
+                            if len(cache[matrix][category][entry][cat]) > 0:
+                                results[matrix][category][entry][cat] = {}
+                        for ttp in cache[matrix][category][entry][cat]:
+                            name = cache[matrix][cat][ttp]['name']
+                            if isinstance(name, list):
+                                name = ', '.join(name)
+                            description = cache[matrix][cat][ttp]['description']
+                            results[matrix][category][entry][cat][ttp] = {
+                                'name': name,
+                                'description': description,
+                            }
+            elif category:
+                results[matrix][category] = {}
+                for entry in cache[matrix][category]:
+                    name = cache[matrix][category][entry]['name']
+                    if isinstance(name, list):
+                        name = ', '.join(name)
+                    description = cache[matrix][category][entry]['description']
+                    results[matrix][category][entry] = {
+                        'name': name,
+                        'description': description,
+                    }
+            else:
+                for category in categories:
+                    if category in cache[matrix]:
+                        results[matrix][category] = {}
+                        for entry in cache[matrix][category]:
+                            name = cache[matrix][category][entry]['name']
+                            if isinstance(name, list):
+                                name = ', '.join(name)
+                            description = cache[matrix][category][entry]['description']
+                            results[matrix][category][entry] = {
+                                'name': name,
+                                'description': description,
+                            }
             return JSONResponse(results)
     except KeyError:
+        raise
         return JSONResponse(content=json.dumps(None))
 
 
