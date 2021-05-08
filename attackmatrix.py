@@ -119,14 +119,17 @@ async def query(request: Request,
             }
             if entry:
                 results[matrix][category] = {}
-                name = cache[matrix][category][entry]['name']
-                if isinstance(name, list):
-                    name = ', '.join(name)
-                description = cache[matrix][category][entry]['description']
-                results[matrix][category][entry] = {
-                    'name': name,
-                    'description': description,
-                }
+                if entry not in cache[matrix][category]:
+                    return JSONResponse(None)
+                else:
+                    name = cache[matrix][category][entry]['name']
+                    if isinstance(name, list):
+                        name = ', '.join(name)
+                    description = cache[matrix][category][entry]['description']
+                    results[matrix][category][entry] = {
+                        'name': name,
+                        'description': description,
+                    }
                 for cat in cache[matrix][category][entry]:
                     if cat in categories:
                         if cat not in results[matrix][category][entry]:
