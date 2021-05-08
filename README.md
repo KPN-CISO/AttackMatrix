@@ -9,7 +9,6 @@ AttackMatrix is a Python module and PHP script to interact with and explore MITR
 - AttackMatrix and WebGrapher: GPLv3
 - [https://d3js.org](D3.js): BSD
 - [https://github.com/dagrejs/dagre-d3](dagre-d3): MIT
-- [https://pypi.org/project/dpath/](dpath): MIT
 - [https://jquery.com/](jQuery): MIT
 - [https://github.com/jaz303/tipsy](tipsy): MIT
 
@@ -47,17 +46,17 @@ The WebGrapher offers the same functionality, but turns the JSON output from the
 ### For the API
 
 1. `Python` 3.5+ (uses modern dictionary merging)
-2. `dpath` (usage is deprecated, requirement will be removed in future versions)
-3. `Uvicorn`
-4. `FastAPI`
-5. At least one MITRE ATT&CK® matrix
+2. `Uvicorn`
+3. `FastAPI`
+4. At least one MITRE ATT&CK® matrix
 
 ### For the WebGrapher
 
 1. D3.js (included)
 2. dagre-d3 (included)
-3. A PHP-enabled webserver (Apache, nginx, ...)
-4. `allow_furl_open` support enabled in the `php.ini` file: the script needs to be able to call the API endpoint
+3. tispy.js/.css (included)
+4. A PHP-enabled webserver (Apache, nginx, ...)
+5. `allow_furl_open` support enabled in the `php.ini` file: the script needs to be able to call the API endpoint
 
 ## Installation
 
