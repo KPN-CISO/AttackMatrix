@@ -58,7 +58,7 @@ if (empty($q)) {
   echo "</body></html>";
   die();
 }
-$api = 'http://0.0.0.0:8008/api';
+$api = 'http://localhost:8008/api';
 if ($q === "explore") {
   $query = $api .= "/explore";
   if (isset($_GET['matrix'])) {
