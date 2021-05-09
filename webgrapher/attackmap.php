@@ -53,9 +53,12 @@ text {
 <?php
 if (isset($_GET['q'])) $q = strtolower($_GET['q']);
 if (empty($q)) {
+  echo "<body>";
+  echo "<b>Incorrect usage! Specify an API method!<b/>";
+  echo "</body></html>";
   die();
 }
-$api = 'http://149.210.137.179:8008/api';
+$api = 'http://0.0.0.0:8008/api';
 if ($q === "explore") {
   $query = $api .= "/explore";
   if (isset($_GET['matrix'])) {
@@ -69,39 +72,66 @@ if ($q === "explore") {
   }
 }
 if ($q === "ttpoverlap") {
-  $ttp = $_GET['ttp'];
-  $ttps = explode(',', $ttp);
-  if (count($ttps) < 2) {
+  if (isset($_GET['ttp'])) {
+    $ttp = $_GET['ttp'];
+    $ttps = explode(',', $ttp);
+    if (count($ttps) < 2) {
+      echo "<body>";
+      echo "<b>Incorrect usage! Choose at least two TTPs!<b/>";
+      echo "</body></html>";
+      die();
+    } else {
+      $query = $api . '/ttpoverlap/?ttp=' . implode('&ttp=', $ttps);
+    }
+  } else {
     echo "<body>";
     echo "<b>Incorrect usage! Choose at least two TTPs!<b/>";
     echo "</body></html>";
     die();
-  } else {
-    $query = $api . '/ttpoverlap/?ttp=' . implode('&ttp=', $ttps);
   }
 }
 if ($q === "actoroverlap") {
-  $actor = $_GET['actor'];
-  $actors = explode(',', $actor);
-  if (count($actors) < 2) {
+  if (isset($_GET['actor'])) {
+    $actor = $_GET['actor'];
+    $actors = explode(',', $actor);
+    if (count($actors) < 2) {
+      echo "<body>";
+      echo "<b>Incorrect usage! Choose at least two Actors!<b/>";
+      echo "</body></html>";
+      die();
+    } else {
+      $query = $api . '/actoroverlap/?actor=' . implode('&actor=', $actors);
+    }
+  } else {
     echo "<body>";
     echo "<b>Incorrect usage! Choose at least two Actors!<b/>";
     echo "</body></html>";
     die();
+  }
+}
+if ($q === "search") {
+  if (isset($_GET['params'])) {
+    $params = $_GET['params'];
+    $query = $api . '/search/?params=' . urlencode($params);
   } else {
-    $query = $api . '/actoroverlap/?actor=' . implode('&actor=', $actors);
+    echo "<body>";
+    echo "<b>Incorrect usage! Specify a search paramater!<b/>";
+    echo "</body></html>";
+    die();
   }
 }
 try {
   $json = file_get_contents($query);
 } catch (Exception $exception) {
-  die("$exception");
+  echo "Error communicating with the API!";
+  echo "<br />";
+  echo "</body></html>";
+  die();
 }
 $obj = json_decode($json, true);
-if ($obj == "null") {
-  echo "Empty result set: there is no <b>" . $id . "</b> in the <b>" . $cat . "</b> category in the <b>" . $matrix . "</b> matrix!";
+if (empty($obj)) {
+  echo "Empty result set!";
   echo "<br />";
-  print_r($json);
   echo "</body></html>";
   die();
 }
@@ -127,7 +157,8 @@ function emitGraph($parent=0, $key, $value) {
     if ($parent!==0) {
       $parentsafe = json_encode($parent);
       $keysafe = json_encode($key);
-      echo 'g.setEdge(' . $parentsafe . ', ' . $keysafe . ', { curve: d3.curveBasis });';
+      #echo 'g.setEdge(' . $parentsafe . ', ' . $keysafe . ', { curve: d3.curveBasis });';
+      echo 'g.setEdge(' . $parentsafe . ', ' . $keysafe . ', {});';
       echo "\n";
     }
   }
@@ -140,7 +171,8 @@ function emitGraph($parent=0, $key, $value) {
     echo "\n";
     echo 'g.setNode(' . $shortsafe . ', { style: "fill: #aaffaa" });';
     echo "\n";
-    echo 'g.setEdge(' . $parentsafe . ', ' . $shortsafe . ', { curve: d3.curveBasis });';
+    #echo 'g.setEdge(' . $parentsafe . ', ' . $shortsafe . ', { curve: d3.curveBasis });';
+    echo 'g.setEdge(' . $parentsafe . ', ' . $shortsafe . ', {});';
     echo "\n";
   }
   if (is_array($value)) {
@@ -150,19 +182,7 @@ function emitGraph($parent=0, $key, $value) {
   }
 }
 
-// Explore
-if ($q === "explore") {
-  foreach ($obj as $key => $value) {
-    emitGraph(0, $key, $value);
-  }
-}
-// Actoroverlap
-if ($q === "actoroverlap") {
-  foreach ($obj as $key => $value) {
-    emitGraph(0, $key, $value);
-  }
-}
-if ($q === "ttpoverlap") {
+if (isset($q)) {
   foreach ($obj as $key => $value) {
     emitGraph(0, $key, $value);
   }

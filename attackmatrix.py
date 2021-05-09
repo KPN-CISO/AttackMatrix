@@ -435,7 +435,6 @@ def search(options, params=[], matrices='ALL'):
 
 def searchMatrix(options, params, matrixname):
     searchfields = ['name', 'description']
-    cache = {}
     results = {}
     if not matrixname:
         return {}
@@ -462,9 +461,13 @@ def searchMatrix(options, params, matrixname):
 
 def unfoldKeys(options, cache, matrixname, entitytype, entity):
     unfoldFields = ['Actors', 'Malwares', 'Mitigations', 'Subtechniques', 'Techniques', 'Tools']
+    name = cache[matrixname][entitytype][entity]['name']
+    if isinstance(name, list):
+        name = ', '.join(name)
+    description = cache[matrixname][entitytype][entity]['description']
     results = {
-        'name': cache[matrixname][entitytype][entity]['name'],
-        'description': cache[matrixname][entitytype][entity]['description'],
+        'name': name,
+        'description': description,
     }
     for unfoldField in unfoldFields:
         if unfoldField in cache[matrixname][entitytype][entity].keys():
@@ -472,9 +475,13 @@ def unfoldKeys(options, cache, matrixname, entitytype, entity):
                 results[unfoldField] = {}
                 for key in cache[matrixname][entitytype][entity][unfoldField]:
                     if cache[matrixname][unfoldField].get(key):
+                        name = cache[matrixname][unfoldField][key]['name']
+                        if isinstance(name, list):
+                            name = ', '.join(name)
+                        description = cache[matrixname][unfoldField][key]['description']
                         results[unfoldField][key] = {
-                            'name': cache[matrixname][unfoldField][key]['name'],
-                            'description': cache[matrixname][unfoldField][key]['description'],
+                            'name': name,
+                            'description': description,
                         }
                     else:
                         results[unfoldField][key] = {
@@ -499,7 +506,11 @@ def Transform(options, AttackMatrix):
                     if entry['type'] == 'x-mitre-tactic':
                         # Tactic
                         tactic = entry['name']
-                        description = entry['description']
+                        if entry.get('description'):
+                            if (entry.get('x_mitre_deprecated') and options.deprecated):
+                                description = tactic + ": " + entry['description']
+                            else:
+                                description = entry['description']
                         for external_reference in entry['external_references']:
                             if external_reference.get('external_id'):
                                 if 'mitre' and 'attack' in external_reference['source_name'].lower():
@@ -527,9 +538,10 @@ def Transform(options, AttackMatrix):
                         if not subtechnique:
                             technique = entry['name']
                             if entry.get('description'):
-                                description = entry['description']
-                            else:
-                                description = 'Not available.'
+                                if (entry.get('x_mitre_deprecated') and options.deprecated):
+                                    description = technique + ": " + entry['description']
+                                else:
+                                    description = entry['description']
                             for external_reference in entry['external_references']:
                                 if external_reference.get('external_id'):
                                     if 'mitre' and 'attack' in external_reference['source_name'].lower():
@@ -562,9 +574,10 @@ def Transform(options, AttackMatrix):
                             if entry['x_mitre_is_subtechnique']:
                                 subtechnique = entry['name']
                                 if entry.get('description'):
-                                    description = entry['description']
-                                else:
-                                    description = 'Not available.'
+                                    if (entry.get('x_mitre_deprecated') and options.deprecated):
+                                        description = subtechnique + ": " + entry['description']
+                                    else:
+                                        description = entry['description']
                                 for external_reference in entry['external_references']:
                                     if external_reference.get('external_id'):
                                         if 'mitre' and 'attack' in external_reference['source_name'].lower():
@@ -594,9 +607,12 @@ def Transform(options, AttackMatrix):
                         else:
                             names = entry['name']
                         if entry.get('description'):
-                            description = entry['description']
+                            if (entry.get('x_mitre_deprecated') and options.deprecated):
+                                description = names + ": " + entry['description']
+                            else:
+                                description = entry['description']
                         else:
-                            description = 'Not available.'
+                            description = names + ': not available.'
                         for external_reference in entry['external_references']:
                             if external_reference.get('external_id'):
                                 if 'mitre' and 'attack' in external_reference['source_name'].lower():
@@ -618,7 +634,10 @@ def Transform(options, AttackMatrix):
                     if entry['type'] == 'malware':
                         names = entry['x_mitre_aliases']
                         if entry.get('description'):
-                            description = entry['description']
+                            if (entry.get('x_mitre_deprecated') and options.deprecated):
+                                description = names + ": " + entry['description']
+                            else:
+                                description = entry['description']
                         else:
                             description = 'Not available.'
                         for external_reference in entry['external_references']:
@@ -640,7 +659,11 @@ def Transform(options, AttackMatrix):
                 if entry.get('type'):
                     if entry['type'] == 'course-of-action':
                         names = entry['name']
-                        description = entry['description']
+                        if entry.get('description'):
+                            if (entry.get('x_mitre_deprecated') and options.deprecated):
+                                description = names + ": " + entry['description']
+                            else:
+                                description = entry['description']
                         for external_reference in entry['external_references']:
                             if external_reference.get('external_id'):
                                 if 'mitre' and 'attack' in external_reference['source_name'].lower():
@@ -659,7 +682,11 @@ def Transform(options, AttackMatrix):
                 if entry.get('type'):
                     if entry['type'] == 'tool':
                         names = entry['x_mitre_aliases']
-                        description = entry['description']
+                        if entry.get('description'):
+                            if (entry.get('x_mitre_deprecated') and options.deprecated):
+                                description = names + ": " + entry['description']
+                            else:
+                                description = entry['description']
                         for external_reference in entry['external_references']:
                             if external_reference.get('external_id'):
                                 if 'mitre' and 'attack' in external_reference['source_name'].lower():
