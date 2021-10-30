@@ -300,7 +300,7 @@ def findActorOverlap(options, Actors=[]):
                             for candidate in cache[matrixname]['Actors'][actor][overlapkey]:
                                 name = cache[matrixname][overlapkey][candidate]['name']
                                 if isinstance(name, list):
-                                    name = (', '.join(name)).encode('utf-8')
+                                    name = ', '.join(name)
                                 description = cache[matrixname][overlapkey][candidate]['description'].encode('utf-8')
                                 allttps[overlapkey][candidate] = {
                                     'name': name,
@@ -608,7 +608,9 @@ def Transform(options, AttackMatrix):
                             names = entry['name']
                         if entry.get('description'):
                             if (entry.get('x_mitre_deprecated') and options.deprecated):
-                                description = names + ": " + entry['description']
+                                if isinstance(names, list):
+                                    name = ', '.join(names)
+                                description = name + ": " + entry['description']
                             else:
                                 description = entry['description']
                         else:
