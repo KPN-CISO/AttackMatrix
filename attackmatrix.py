@@ -637,7 +637,9 @@ def Transform(options, AttackMatrix):
                         names = entry['x_mitre_aliases']
                         if entry.get('description'):
                             if (entry.get('x_mitre_deprecated') and options.deprecated):
-                                description = names + ": " + entry['description']
+                                if isinstance(names, list):
+                                    name = ', '.join(names)
+                                description = name + ": " + entry['description']
                             else:
                                 description = entry['description']
                         else:
