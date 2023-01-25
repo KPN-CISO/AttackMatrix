@@ -17,7 +17,6 @@ import itertools
 import logging
 import json
 import pathlib
-import pickle
 import pprint
 import shutil
 import string
@@ -30,6 +29,26 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from typing import Optional
 
 
+typemap = collections.OrderedDict({
+    'intrusion-set': 'Actors',
+    'campaign': 'Campaigns',
+    'malware': 'Malwares',
+    'course-of-action': 'Mitigations',
+    'x-mitre-tactic': 'Tactics',
+    'attack-pattern': 'Techniques',
+    'tool': 'Tools',
+    'uid': 'UID',
+})
+categories=[
+    'Actors',
+    'Campaigns',
+    'Malwares',
+    'Matrices',
+    'Mitigations',
+    'Tactics',
+    'Techniques',
+    'Tools'
+]
 tags_metadata = [
     {
         'name': 'docs',
@@ -41,44 +60,41 @@ tags_metadata = [
                        'under *treepath*, including all empty branches. **WARNING**: Can result in a lot of output!'
                        '<br /><br />'
                        '[Example query]'
-                       '(http://' + options.ip + ':' + str(options.port) + '/api/explore/Enterprise/Actors/G0005)'
-                       ' to find the *Actor G0005* in the *Enterprise* ATT&CK® matrix.',
+                       '(http://' + options.ip + ':' + str(options.port) + '/api/explore/Actors/G0005) '
+                       'to display all information about the *Actor G0005*.',
     },
     {
         'name': 'search',
-        'description': 'Does a case-insensitive *LOGICAL OR* (merge) search for all params fields in all entity names and '
-                       'descriptions, and returns a list of matching entities. An optional *matrix* argument can be supplied '
-                       'to limit searches to a particular ATT&CK® matrix.'
+        'description': 'Does a case-insensitive *LOGICAL AND search for all params fields in all entity names, urls and '
+                       'descriptions, and returns a list of matching entities in all loaded MITRE ATT&CK® matrices.'
                        '<br /><br />'
                        '[Example query]'
                        '(http://' + options.ip + ':' + str(options.port) +
-                       '/api/search?params=dragon&params=capture&params=property&matrix=ICS&matrix=Enterprise)'
-                       ' to find all entities with the words *dragon*, *capture* or *property* in the Enterprise and '
-                       'ICS ATT&CK® matrices.',
+                       '/api/search?params=dragon&params=capture&params=property) '
+                       'to find all entities with the words *dragon*, *capture* and *property* in all ATT&CK matrices.',
     },
     {
         'name': 'actoroverlap',
-        'description': 'Finds the overlapping TTPs (*Malwares, Mitigations, Subtechniques, Techniques and Tools*) for '
-                       'two actors. Returns a list of Actors, a list of matrices they were found in, and only the TTPs '
-                       'that overlapped (with their names/descriptions).'
+        'description': 'Finds the overlapping TTPs (*Malwares, Mitigations, Techniques, etc.*) for '
+                       'two actors. Returns a list of Actors, a list of matrices they were found in, and *only* the TTPs '
+                       'that overlapped (with their names/descriptions). Finding the TTPs that do not overlap can be '
+                       'relatively trivially done through programmatical means, by pulling the complete Actor records '
+                       'using the `/explore/` API endpoint and comparing the results for every actor with the overlapping '
+                       'TTPs logically (`<Overlapping TTPs> NOT <actor\'s TTPs>`) to find the remaining TTPs per actor.'
                        '<br /><br />'
                        '[Example query]'
-                       '(http://' + options.ip + ':' + str(options.port) + '/api/actoroverlap/?actor1=G0064&actor2=G0050)'
+                       '(http://' + options.ip + ':' + str(options.port) + '/api/actoroverlap?actors=G0064&actors=G0050)'
                        ' to find the overlapping TTPs of *Actors G0064* and *G0050*.',
     },
     {
         'name': 'ttpoverlap',
-        'description': 'Finds all actors that have a specific set of TTPs (*Malwares, Subtechniques, Techniques '
+        'description': 'Finds all actors that have a specific set of TTPs (*Malwares, (Sub)Techniques, Techniques '
                        'and Tools*). The number of TTPs can be varied, i.e.: 1 ... n fields can be given. Returns '
                        'the matching Actors with all of their ATT&CK® entity types (including names/descriptions).'
                        '<br /><br />'
                        '[Example query]'
-                       '(http://' + options.ip + ':' + str(options.port) + '/api/ttpoverlap/?ttp=S0002&ttp=S0008&ttp=T1560.001)'
-                       ' to find which *Actors* use *Tool S0002*, *Tool S0008* and *Subtechnique T1560.001*.',
-    },
-    {
-        'name': 'deprecated',
-        'description': 'These functions are *DEPRECATED* and should only be used for compatibility reasons.',
+                       '(http://' + options.ip + ':' + str(options.port) + '/api/ttpoverlap?ttp=S0002&ttp=S0008&ttp=T1560.001) '
+                       'to find which *Actors* use *Tool S0002*, *Tool S0008* and *Technique T1560.001*.',
     },
 ]
 app = FastAPI(title='MITRE ATT&CK Matrix API', openapi_tags=tags_metadata)
@@ -99,680 +115,307 @@ async def query(request: Request,
                 token: Optional[str] = None):
     if options.token:
         if token != options.token:
-            raise HTTPException(status_code=403, detail='Missing or incorrect token')
+            raise HTTPException(status_code=403, detail='Access denied: missing or incorrect token')
     try:
+        results = {}
+        cache = loadCache(options)
         if not request.path_params['treepath']:
-            return JSONResponse(Matrices)
-        else:
-            cache = loadCaches(options)
-            try:
-                default = [''] * 3
-                matrix, category, entry, *_ = itertools.chain(request.path_params['treepath'].strip('/').split('/'), default)
-            except ValueError:
-                return JSONResponse(content=json.dumps(None))
-            categories = ('Actors', 'Malwares', 'Mitigations', 'Subtechniques', 'Tactics', 'Techniques', 'Tools')
             results = {
-                matrix: {
-                    'name': Matrices[matrix]['name'],
-                    'description': Matrices[matrix]['description'],
+                'Metadata': {
+                    'name': 'AttackMatrix API',
+                    'description': 'Available keys: ' + ', '.join(key for key in cache),
+                    'matrices': cache['Matrices'],
                 },
             }
-            if entry:
-                if entry not in cache[matrix][category]:
-                    return JSONResponse(None)
-                else:
-                    results[matrix][category] = {}
-                    name = cache[matrix][category][entry]['name']
-                    if isinstance(name, list):
-                        name = ', '.join(name)
-                    description = cache[matrix][category][entry]['description']
-                    results[matrix][category][entry] = {
-                        'name': name,
-                        'description': description,
-                    }
-                for cat in cache[matrix][category][entry]:
-                    if cat in categories:
-                        if cat not in results[matrix][category][entry]:
-                            if len(cache[matrix][category][entry][cat]) > 0:
-                                results[matrix][category][entry][cat] = {}
-                        for ttp in cache[matrix][category][entry][cat]:
-                            if ttp not in cache[matrix][cat]:
-                                results[matrix][category][entry][cat][ttp] = {
-                                    'name': ttp,
-                                    'description': '*** DEPRECATED OR REVOKED ***',
-                                }
-                            else:
-                                name = cache[matrix][cat][ttp]['name']
-                                if isinstance(name, list):
-                                    name = ', '.join(name)
-                                description = cache[matrix][cat][ttp]['description']
-                                results[matrix][category][entry][cat][ttp] = {
-                                    'name': name,
-                                    'description': description,
-                                }
-            elif category:
-                if category not in cache[matrix]:
-                    return JSONResponse(None)
-                else:
-                    results[matrix][category] = {}
-                for entry in cache[matrix][category]:
-                    name = cache[matrix][category][entry]['name']
-                    if isinstance(name, list):
-                        name = ', '.join(name)
-                    description = cache[matrix][category][entry]['description']
-                    results[matrix][category][entry] = {
-                        'name': name,
-                        'description': description,
-                    }
-            else:
-                for category in categories:
-                    if category in cache[matrix]:
-                        results[matrix][category] = {}
-                        for entry in cache[matrix][category]:
-                            name = cache[matrix][category][entry]['name']
-                            if isinstance(name, list):
-                                name = ', '.join(name)
-                            description = cache[matrix][category][entry]['description']
-                            results[matrix][category][entry] = {
-                                'name': name,
-                                'description': description,
-                            }
-            return JSONResponse(results)
+        else:
+            treepath = request.path_params['treepath'].split('/')
+            results = cache[treepath[0]][treepath[1]] if len(treepath)>1 else cache[treepath[0]]
     except KeyError:
-        raise
-        return JSONResponse(content=json.dumps(None))
+        return None
+    finally:
+        return JSONResponse(results)
 
 
-@app.get('/api/search/', tags=['search'])
+@app.get('/api/search', tags=['search'])
 async def searchParam(request: Request,
                       params: list = Query([]),
-                      matrix: Optional[list] = Query(['ALL']),
                       token: Optional[str] = None):
     if options.token:
         if token != options.token:
-            raise HTTPException(status_code=403, detail='Missing or incorrect token')
-    if not (params or matrix):
-        return {}
-    else:
-        return search(options, params, matrix)
+            raise HTTPException(status_code=403, detail='Access denied: missing or incorrect token')
+    return search(options, params)
 
-
-@app.get('/api/search/{params:path}', tags=['deprecated'])
-async def deprecatedSearch(request: Request,
-                           params: str,
-                           matrix: Optional[list] = Query(['ALL']),
-                           token: Optional[str] = None):
-    if options.token:
-        if token != options.token:
-            raise HTTPException(status_code=403, detail='Missing or incorrect token')
-    if not (params or matrix):
-        return {}
-    else:
-        params = request.path_params['params'].rstrip('/').split('/')
-        return search(options, params, matrix)
-
-
-@app.get('/api/actoroverlap/', tags=['actoroverlap'])
+@app.get('/api/actoroverlap', tags=['actoroverlap'])
 async def actorOverlap(request: Request,
-                       actor: list = Query([]),
+                       actors: list = Query([]),
                        token: Optional[str] = None):
     if options.token:
         if token != options.token:
-            raise HTTPException(status_code=403, detail='Missing or incorrect token')
-    return findActorOverlap(options, actor)
+            raise HTTPException(status_code=403, detail='Access denied: missing or incorrect token')
+    return findActorOverlap(options, actors)
 
 
-@app.get('/api/actoroverlap/{actor:path}', tags=['deprecated'])
-async def deprecatedActorOverlap(request: Request,
-                                 actor: str,
-                                 token: Optional[str] = None):
-    if options.token:
-        if token != options.token:
-            raise HTTPException(status_code=403, detail='Missing or incorrect token')
-    Actors = request.path_params['actor'].rstrip('/').split('/')
-    return findActorOverlap(options, Actors)
-
-
-@app.get('/api/ttpoverlap/', tags=['ttpoverlap'])
+@app.get('/api/ttpoverlap', tags=['ttpoverlap'])
 async def ttpOverlap(request: Request,
-                     ttp: list = Query([]),
+                     ttps: list = Query([]),
                      token: Optional[str] = None):
     if options.token:
         if token != options.token:
-            raise HTTPException(status_code=403, detail='Missing or incorrect token')
-    return findTTPOverlap(options, ttp)
+            raise HTTPException(status_code=403, detail='Access denied: missing or incorrect token')
+    return findTTPOverlap(options, ttps)
 
 
-@app.get('/api/ttpoverlap/{ttp:path}', tags=['deprecated'])
-async def deprecatedTTPOverlap(request: Request,
-                               ttp: str,
-                               token: Optional[str] = None):
-    if options.token:
-        if token != options.token:
-            raise HTTPException(status_code=403, detail='Missing or incorrect token')
-    TTPs = request.path_params['ttp'].rstrip('/').split('/')
-    return findTTPOverlap(options, TTPs)
-
-
-def findActorOverlap(options, Actors=[]):
-    cache = loadCaches(options)
-    overlapkeys = {
-        'Malwares': {},
-        'Mitigations': {},
-        'Subtechniques': {},
-        'Techniques': {},
-        'Tools': {},
-    }
-    results = {
-        'Actors': {},
-    }
-    for matrixname in cache.keys():
-        for mitreID in Actors:
-            if options.verbose:
-                logging.info('Searching ' + matrixname + ' for ' + mitreID)
-            if mitreID in cache[matrixname]['Actors'].keys():
-                name = cache[matrixname]['Actors'][mitreID]['name']
-                if isinstance(name, list):
-                    name = ', '.join(name)
-                description = cache[matrixname]['Actors'][mitreID]['description']
-                if mitreID not in results['Actors']:
-                    results['Actors'][mitreID] = {
-                            'name': name,
-                            'description': description,
-                            'Matrices': {},
-                    }
-                if matrixname not in results['Actors'][mitreID]['Matrices']:
-                    results['Actors'][mitreID]['Matrices'][matrixname] = {
-                            'name': matrixname,
-                            'description': Matrices[matrixname]['name'],
-                    }
-    allttps = {}
-    if len(Actors) != len(results['Actors']):
-        return JSONResponse(content=json.dumps(None))
-    for actor in results['Actors']:
-        for matrixname in Matrices:
-            if matrixname in results['Actors'][actor]['Matrices']:
-                for overlapkey in overlapkeys:
-                    if overlapkey in cache[matrixname]['Actors'][actor]:
-                        if overlapkey not in allttps:
-                            allttps[overlapkey] = {}
-                        if len(cache[matrixname]['Actors'][actor][overlapkey])>0:
-                            for candidate in cache[matrixname]['Actors'][actor][overlapkey]:
-                                name = cache[matrixname][overlapkey][candidate]['name']
-                                if isinstance(name, list):
-                                    name = ', '.join(name)
-                                description = cache[matrixname][overlapkey][candidate]['description'].encode('utf-8')
-                                allttps[overlapkey][candidate] = {
-                                    'name': name,
-                                    'description': description,
-                                }
-    ttplist = []
-    for overlapkey in allttps:
-        for ttp in allttps[overlapkey]:
-            for actor in results['Actors']:
-                for matrixname in Matrices:
-                    if matrixname in results['Actors'][actor]['Matrices']:
-                        if ttp in cache[matrixname]['Actors'][actor][overlapkey]:
-                            ttplist.append(ttp)
-    shared = collections.Counter(ttplist)
-    ttpoverlap = [k for k, v in shared.items() if v == len(results['Actors'])]
-    for actor in results['Actors']:
-        for matrix in results['Actors'][actor]['Matrices']:
-            name = ''.join(cache[matrix]['Actors'][actor]['name'])
-            if isinstance(name, list):
-                name = ', '.join(name)
-            else:
-                name = ''.join(name)
-            description = ''.join(cache[matrix]['Actors'][actor]['description'])
-    for actor in results['Actors']:
-        ttps = {}
-        for ttpid in ttpoverlap:
-            name = set()
-            description = set()
-            for matrix in Matrices:
-                for overlapkey in overlapkeys:
-                    if overlapkey not in ttps:
-                        ttps[overlapkey] = {}
-                    if ttpid in cache[matrix][overlapkey]:
-                        ttpname = cache[matrix][overlapkey][ttpid]['name']
-                        if isinstance(ttpname, list):
-                            name.add(', '.join(ttpname))
-                        else:
-                            name.add(ttpname)
-                        description.add(cache[matrix][overlapkey][ttpid]['description'])
-                        ttpname = ', '.join(name)
-                        ttpdescription = ''.join(description)
-                        ttps[overlapkey][ttpid] = {
-                            'name': ttpname,
-                            'description': ttpdescription,
-                        }
-    for overlapkey in overlapkeys:
-        if overlapkey in ttps:
-            if not bool(ttps[overlapkey]):
-                del ttps[overlapkey]
-    for actor in results['Actors']:
-        results['Actors'][actor].update(ttps)
-    return {k: v for k, v in results.items() if v}
-
-
-def findTTPOverlap(options, TTPs=[]):
-    overlapkeys = {
-        'Malwares': {},
-        'Subtechniques': {},
-        'Techniques': {},
-        'Tools': {},
-    }
-    results = {}
-    cache = loadCaches(options)
-    for matrixname in cache.keys():
-        results[matrixname] = {'Actors': {}}
-        for candidate in cache[matrixname]['Actors'].keys():
-            candidatecontent = []
-            for overlapkey in overlapkeys:
-                if cache[matrixname]['Actors'][candidate].get(overlapkey):
-                    candidatecontent += cache[matrixname]['Actors'][candidate][overlapkey]
-            if (len(candidatecontent) > 0) and all(ttp in candidatecontent for ttp in TTPs):
-                results[matrixname]['Actors'][candidate] = cache[matrixname]['Actors'][candidate]
-                name = cache[matrixname]['Actors'][candidate]['name']
-                if isinstance(name, list):
-                    results[matrixname]['Actors'][candidate]['name'] = ', '.join(cache[matrixname]['Actors'][candidate]['name'])
-                else:
-                    results[matrixname]['Actors'][candidate]['name'] = cache[matrixname]['Actors'][candidate]['name']
-            for actor in results[matrixname]['Actors']:
-                for ttpkey in overlapkeys.keys():
-                    if results[matrixname]['Actors'][actor].get(ttpkey):
-                        ttps = results[matrixname]['Actors'][actor][ttpkey]
-                        del results[matrixname]['Actors'][actor][ttpkey]
-                        results[matrixname]['Actors'][actor][ttpkey] = {}
-                        for ttp in ttps:
-                            if cache[matrixname][ttpkey].get(ttp):
-                                name = cache[matrixname][ttpkey][ttp]['name']
-                                if isinstance(name, list):
-                                    name = ', '.join(name)
-                                results[matrixname]['Actors'][actor][ttpkey][ttp] = {
-                                    'name': name,
-                                    'description': cache[matrixname][ttpkey][ttp]['description'],
-                                }
-    for matrixname in cache.keys():
-        if len(results[matrixname]['Actors'].keys()) == 0:
-            del results[matrixname]
-    return results
-
-
-def loadCache(options, matrixname):
-    cachefile = pathlib.Path(options.cachedir+'/'+matrixname+options.cacheaffix)
-    if options.verbose:
-        logging.info('Loading cache ' + cachefile.name + '...')
+def findActorOverlap(options, actors=[]):
     try:
-        with open(cachefile, 'rb') as cache:
-            matrix = pickle.load(cache)
-            return matrix
+        response = {}
+        if not len(actors)>1:
+            response = {
+                'name': 'API Error',
+                'description': 'Specify at least two Actors to check for overlap!'
+            }
+        else:
+            cache = loadCache(options)
+            response = collections.defaultdict(lambda: {}, {})
+            ttps = {}
+            for actor in actors:
+                response[actor] = {}
+                for category in categories:
+                    if category in cache['Actors'][actor]:
+                        for ttp in cache['Actors'][actor][category]:
+                            if not category in ttps:
+                                ttps[category] = {}
+                            ttps[category][ttp] = cache['Actors'][actor][category][ttp]
+            # Wipe TTP categories and types that do not appear in all actors
+            for ttpcategory in list(ttps):
+                for ttp in list(ttps[ttpcategory]):
+                    for actor in actors:
+                        if ttpcategory in cache['Actors'][actor]:
+                            if not ttp in cache['Actors'][actor][ttpcategory]:
+                                if ttp in ttps[ttpcategory]:
+                                    del ttps[ttpcategory][ttp]
+                        else:
+                            if ttpcategory in ttps:
+                                del ttps[ttpcategory]
+            count = 0
+            for actor in actors:
+                for ttpcategory in ttps:
+                    if len(ttps[ttpcategory])>0:
+                        response[actor][ttpcategory] = ttps[ttpcategory]
+                        count += len(ttps[ttpcategory])
+                response[actor]['Metadata'] = cache['Actors'][actor]['Metadata']
+            response['count'] = count/len(actors)
+    except Exception as e:
+            response = {
+                'name': 'Python Error',
+                'description': str(type(e))+': '+str(e),
+            }
+    finally:
+        return response
+
+
+def findTTPOverlap(options, ttps=[]):
+    try:
+        response = {}
+        if not len(ttps)>1:
+            response = {
+                'name': 'API Error',
+                'description': 'Specify at least two TTPs to check for overlap!'
+            }
+        else:
+            cache = loadCache(options)
+            response = {}
+            for actor in cache['Actors']:
+                actorttps = []
+                response[actor] = {}
+                for category in categories:
+                    if category in cache['Actors'][actor]:
+                        actorttps += list(cache['Actors'][actor][category])
+                if set(ttps).issubset(actorttps):
+                    response[actor] = cache['Actors'][actor]
+                else:
+                    del response[actor]
+    except Exception as e:
+            response = {
+                'name': 'Python Error',
+                'description': str(type(e))+': '+str(e),
+            }
+            response['count'] = count/len(actors)
+    finally:
+        return response
+
+
+def search(options, params=[]):
+    try:
+        response = {}
+        if not len(params):
+            response = {
+                'name': 'API Error',
+                'description': 'Specify at least one search parameter!'
+            }
+        else:
+            cache = loadCache(options)
+            response = collections.defaultdict(lambda: {})
+            for category in categories:
+                for object in cache[category]:
+                    metadata = cache[category][object]['Metadata']
+                    contents = ' '.join(metadata['name'])
+                    contents += ' '.join(metadata['description'])
+                    contents += ' '.join(metadata['url'])
+                    if all(term in contents.lower() for term in params):
+                        response[category][object] = cache[category][object]
+            response['count'] = sum(len(response[item]) for item in response)
+    except Exception as e:
+        response = {
+            'name': 'Python Error',
+            'description': str(type(e))+': '+str(e),
+        }
+    finally:
+        return response
+
+
+def loadCache(options):
+    cachefile = pathlib.Path(options.cachefile)
+    if options.verbose:
+        logging.info('Loading cache ' + cache.name + '...')
+    try:
+        with open(cachefile, 'r') as cache:
+            return json.loads(cache.read())
     except (ValueError, FileNotFoundError):
         if options.verbose:
             logging.error('Error loading the cachefile ' + cachefile.name)
 
 
-def loadCaches(options):
-    matrixcaches = list(Matrices.keys())
-    matrices = {}
-    for matrixname in matrixcaches:
-        matrices = {**matrices, **loadCache(options, matrixname)}
-    return matrices
-
-
-def search(options, params=[], matrices='ALL'):
-    if matrices == ['ALL']:
-        matrices = Matrices.keys()
-    else:
-        if not isinstance(matrices, list):
-            matrices = [matrices,]
-    results = {}
-    for matrixname in matrices:
-        results[matrixname] = {}
-        results[matrixname] = {**results[matrixname], **searchMatrix(options, params, matrixname)}
-    return {key: value for key, value in results.items() if (value is not None) and (len(value) > 0)}
-
-
-def searchMatrix(options, params, matrixname):
-    searchfields = ['name', 'description']
-    results = {}
-    if not matrixname:
-        return {}
-    cache = loadCache(options, matrixname)
-    if not cache:
-        return results
-    for query in params:
-        for entitytype in cache[matrixname].keys():
-            if not results.get(entitytype):
-                results[entitytype] = {}
-            for entity in cache[matrixname][entitytype].keys():
-                for fieldname in searchfields:
-                    if isinstance(cache[matrixname][entitytype][entity][fieldname], list):
-                        for item in cache[matrixname][entitytype][entity][fieldname]:
-                            if query.lower() in item.lower():
-                                if not results[entitytype].get(entity):
-                                    results[entitytype][entity] = unfoldKeys(options, cache, matrixname, entitytype, entity)
-                    else:
-                        if query.lower() in cache[matrixname][entitytype][entity][fieldname]:
-                            if not results[entitytype].get(entity):
-                                results[entitytype][entity] = unfoldKeys(options, cache, matrixname, entitytype, entity)
-    return {key: value for key, value in results.items() if (value is not None) and (len(value) > 0)}
-
-
-def unfoldKeys(options, cache, matrixname, entitytype, entity):
-    unfoldFields = ['Actors', 'Malwares', 'Mitigations', 'Subtechniques', 'Techniques', 'Tools']
-    name = cache[matrixname][entitytype][entity]['name']
-    if isinstance(name, list):
-        name = ', '.join(name)
-    description = cache[matrixname][entitytype][entity]['description']
-    results = {
-        'name': name,
-        'description': description,
-    }
-    for unfoldField in unfoldFields:
-        if unfoldField in cache[matrixname][entitytype][entity].keys():
-            if len(cache[matrixname][entitytype][entity][unfoldField])>0:
-                results[unfoldField] = {}
-                for key in cache[matrixname][entitytype][entity][unfoldField]:
-                    if cache[matrixname][unfoldField].get(key):
-                        name = cache[matrixname][unfoldField][key]['name']
-                        if isinstance(name, list):
-                            name = ', '.join(name)
-                        description = cache[matrixname][unfoldField][key]['description']
-                        results[unfoldField][key] = {
-                            'name': name,
-                            'description': description,
-                        }
-                    else:
-                        results[unfoldField][key] = {
-                            'name': key,
-                            'description': '*** DEPRECATED OR REVOKED ' +
-                                           unfoldField.rstrip('s').upper() + ' ***',
-                        }
-                    pass
-    return results
-
-
-def Transform(options, AttackMatrix):
-    matrix = {
-        options.matrix: {},
-    }
-    # Create all tactics
-    matrix[options.matrix]['Tactics'] = {}
-    for entry in AttackMatrix['objects']:
-        if not entry.get('revoked') or (entry.get('revoked') and options.revoked):
-            if not entry.get('x_mitre_deprecated') or (entry.get('x_mitre_deprecated') and options.deprecated):
-                if entry.get('type'):
-                    if entry['type'] == 'x-mitre-tactic':
-                        # Tactic
-                        tactic = entry['name']
-                        if entry.get('description'):
-                            if (entry.get('x_mitre_deprecated') and options.deprecated):
-                                description = tactic + ": " + entry['description']
-                            else:
-                                description = entry['description']
-                        for external_reference in entry['external_references']:
-                            if external_reference.get('external_id'):
-                                if 'mitre' and 'attack' in external_reference['source_name'].lower():
-                                    id = external_reference['external_id']
-                        matrix[options.matrix]['Tactics'][id] = {
-                                'name': tactic,
-                                'description': description,
-                                'Techniques': [],
-                        }
-    # Create all techniques
-    matrix[options.matrix]['Techniques'] = {}
-    for entry in AttackMatrix['objects']:
-        if not entry.get('revoked') or (entry.get('revoked') and options.revoked):
-            if not entry.get('x_mitre_deprecated') or (entry.get('x_mitre_deprecated') and options.deprecated):
-                if entry.get('type'):
-                    if entry['type'] == 'attack-pattern':
-                        if entry.get('x_mitre_is_subtechnique'):
-                            if not entry['x_mitre_is_subtechnique']:
-                                subtechnique = False
-                            else:
-                                subtechnique = True
-                        else:
-                            subtechnique = False
-                        # Not a subtechnique
-                        if not subtechnique:
-                            technique = entry['name']
-                            if entry.get('description'):
-                                if (entry.get('x_mitre_deprecated') and options.deprecated):
-                                    description = technique + ": " + entry['description']
-                                else:
-                                    description = entry['description']
-                            for external_reference in entry['external_references']:
-                                if external_reference.get('external_id'):
-                                    if 'mitre' and 'attack' in external_reference['source_name'].lower():
-                                        id = external_reference['external_id']
-                            matrix[options.matrix]['Techniques'][id] = {
-                                    'name': technique,
-                                    'description': description,
-                                    'Actors': [],
-                                    'Malwares': [],
-                                    'Mitigations': [],
-                                    'Subtechniques': [],
-                                    'Tools': [],
-                            }
-                            if entry.get('kill_chain_phases'):
-                                for kill_chain_type in entry['kill_chain_phases']:
-                                    if ('mitre' and 'attack' in kill_chain_type['kill_chain_name']) and kill_chain_type.get('phase_name'):
-                                        phase_name = string.capwords(kill_chain_type['phase_name'].replace('-', ' '))
-                                        for tactic in matrix[options.matrix]['Tactics']:
-                                            if matrix[options.matrix]['Tactics'][tactic]['name'].lower() in phase_name.lower():
-                                                if id not in matrix[options.matrix]['Tactics'][tactic]['Techniques']:
-                                                    matrix[options.matrix]['Tactics'][tactic]['Techniques'].append(id)
-    # Create all subtechniques
-    matrix[options.matrix]['Subtechniques'] = {}
-    for entry in AttackMatrix['objects']:
-        if not entry.get('revoked') or (entry.get('revoked') and options.revoked):
-            if not entry.get('x_mitre_deprecated') or (entry.get('x_mitre_deprecated') and options.deprecated):
-                if entry.get('type'):
-                    if entry['type'] == 'attack-pattern':
-                        if entry.get('x_mitre_is_subtechnique'):
-                            if entry['x_mitre_is_subtechnique']:
-                                subtechnique = entry['name']
-                                if entry.get('description'):
-                                    if (entry.get('x_mitre_deprecated') and options.deprecated):
-                                        description = subtechnique + ": " + entry['description']
-                                    else:
-                                        description = entry['description']
-                                for external_reference in entry['external_references']:
-                                    if external_reference.get('external_id'):
-                                        if 'mitre' and 'attack' in external_reference['source_name'].lower():
-                                            id = external_reference['external_id']
-                                            technique = id.split('.')[0]
-                                            techniquename = matrix[options.matrix]['Techniques'][technique]['name']
-                            matrix[options.matrix]['Subtechniques'][id] = {
-                                    'name': subtechnique,
-                                    'subtechnique_of': technique,
-                                    'description': description,
-                                    'Actors': [],
-                                    'Malwares': [],
-                                    'Mitigations': [],
-                                    'Subtechniques': [],
-                                    'Tools': [],
-                            }
-                            matrix[options.matrix]['Techniques'][technique]['Subtechniques'].append(id)
-    # Create all actors
-    matrix[options.matrix]['Actors'] = {}
-    for entry in AttackMatrix['objects']:
-        if not entry.get('revoked') or (entry.get('revoked') and options.revoked):
-            if not entry.get('x_mitre_deprecated') or (entry.get('x_mitre_deprecated') and options.deprecated):
-                if entry.get('type'):
-                    if entry['type'] == 'intrusion-set':
-                        if entry.get('aliases'):
-                            names = entry['aliases']
-                        else:
-                            names = entry['name']
-                        if entry.get('description'):
-                            if (entry.get('x_mitre_deprecated') and options.deprecated):
-                                if isinstance(names, list):
-                                    name = ', '.join(names)
-                                description = name + ": " + entry['description']
-                            else:
-                                description = entry['description']
-                        else:
-                            description = names + ': not available.'
-                        for external_reference in entry['external_references']:
-                            if external_reference.get('external_id'):
-                                if 'mitre' and 'attack' in external_reference['source_name'].lower():
-                                    id = external_reference['external_id']
-                        matrix[options.matrix]['Actors'][id] = {
-                                'name': names,
-                                'description': description,
-                                'Malwares': [],
-                                'Subtechniques': [],
-                                'Techniques': [],
-                                'Tools': [],
-                        }
-    # Create all malwares
-    matrix[options.matrix]['Malwares'] = {}
-    for entry in AttackMatrix['objects']:
-        if not entry.get('revoked'):
-            if not entry.get('x_mitre_deprecated') or (entry.get('x_mitre_deprecated') and options.deprecated):
-                if entry.get('type'):
-                    if entry['type'] == 'malware':
-                        names = entry['x_mitre_aliases']
-                        if entry.get('description'):
-                            if (entry.get('x_mitre_deprecated') and options.deprecated):
-                                if isinstance(names, list):
-                                    name = ', '.join(names)
-                                description = name + ": " + entry['description']
-                            else:
-                                description = entry['description']
-                        else:
-                            description = 'Not available.'
-                        for external_reference in entry['external_references']:
-                            if external_reference.get('external_id'):
-                                if 'mitre' and 'attack' in external_reference['source_name'].lower():
-                                    id = external_reference['external_id']
-                        matrix[options.matrix]['Malwares'][id] = {
-                                'name': names,
-                                'description': description,
-                                'Actors': [],
-                                'Subtechniques': [],
-                                'Techniques': [],
-                        }
-    # Create all mitigations
-    matrix[options.matrix]['Mitigations'] = {}
-    for entry in AttackMatrix['objects']:
-        if not entry.get('revoked') or (entry.get('revoked') and options.revoked):
-            if not entry.get('x_mitre_deprecated') or (entry.get('x_mitre_deprecated') and options.deprecated):
-                if entry.get('type'):
-                    if entry['type'] == 'course-of-action':
-                        names = entry['name']
-                        if entry.get('description'):
-                            if (entry.get('x_mitre_deprecated') and options.deprecated):
-                                description = names + ": " + entry['description']
-                            else:
-                                description = entry['description']
-                        for external_reference in entry['external_references']:
-                            if external_reference.get('external_id'):
-                                if 'mitre' and 'attack' in external_reference['source_name'].lower():
-                                    id = external_reference['external_id']
-                        matrix[options.matrix]['Mitigations'][id] = {
-                                'name': names,
-                                'description': description,
-                                'Subtechniques': [],
-                                'Techniques': [],
-                        }
-    # Create all tools
-    matrix[options.matrix]['Tools'] = {}
-    for entry in AttackMatrix['objects']:
-        if not entry.get('revoked'):
-            if not entry.get('x_mitre_deprecated') or (entry.get('x_mitre_deprecated') and options.deprecated):
-                if entry.get('type'):
-                    if entry['type'] == 'tool':
-                        names = entry['x_mitre_aliases']
-                        if entry.get('description'):
-                            if (entry.get('x_mitre_deprecated') and options.deprecated):
-                                description = names + ": " + entry['description']
-                            else:
-                                description = entry['description']
-                        for external_reference in entry['external_references']:
-                            if external_reference.get('external_id'):
-                                if 'mitre' and 'attack' in external_reference['source_name'].lower():
-                                    id = external_reference['external_id']
-                        matrix[options.matrix]['Tools'][id] = {
-                                'name': names,
-                                'description': description,
-                                'Actors': [],
-                                'Subtechniques': [],
-                                'Techniques': [],
-                        }
-    # LINK ALL THE THINGS!
-    for entry in AttackMatrix['objects']:
-        if not entry.get('revoked') or (entry.get('revoked') and options.revoked):
-            if not entry.get('x_mitre_deprecated') or (entry.get('x_mitre_deprecated') and options.deprecated):
-                if entry.get('type'):
-                    if entry.get('relationship_type'):
-                        relationship_type = entry['relationship_type']
-                    if entry['type'] == 'relationship' and (relationship_type == 'mitigates' or relationship_type == 'uses'):
-                        source = entry['source_ref']
-                        target = entry['target_ref']
-                        sourceid = None
-                        targetid = None
-                        for sourceentry in AttackMatrix['objects']:
-                            if sourceentry['id'].lower() == source.lower():
-                                if sourceentry['type'] == 'attack-pattern':
-                                    sourcetype = 'Techniques'
-                                if sourceentry['type'] == 'intrusion-set':
-                                    sourcetype = 'Actors'
-                                if sourceentry['type'] == 'malware':
-                                    sourcetype = 'Malwares'
-                                if sourceentry['type'] == 'course-of-action':
-                                    sourcetype = 'Mitigations'
-                                if sourceentry['type'] == 'tool':
-                                    sourcetype = 'Tools'
-                                for external_reference in sourceentry['external_references']:
-                                    if external_reference.get('external_id'):
-                                        if 'mitre' and 'attack' in external_reference['source_name'].lower():
-                                            sourceid = external_reference['external_id']
-                                            if '.' in sourceid:
-                                                sourcetype = 'Subtechniques'
-                        for targetentry in AttackMatrix['objects']:
-                            if targetentry['id'].lower() == target.lower():
-                                if targetentry['type'] == 'attack-pattern':
-                                    targettype = 'Techniques'
-                                if targetentry['type'] == 'intrusion-set':
-                                    targettype = 'Actors'
-                                if targetentry['type'] == 'malware':
-                                    targettype = 'Malwares'
-                                if targetentry['type'] == 'course-of-action':
-                                    targettype = 'Mitigations'
-                                if targetentry['type'] == 'tool':
-                                    targettype = 'Tools'
-                                for external_reference in targetentry['external_references']:
-                                    if external_reference.get('external_id'):
-                                        if 'mitre' and 'attack' in external_reference['source_name'].lower():
-                                            targetid = external_reference['external_id']
-                                            if '.' in targetid:
-                                                targettype = 'Subtechniques'
-                        if (sourceid and targetid) and (sourceid != targetid):
-                            try:
-                                if targetid not in matrix[options.matrix][sourcetype][sourceid][targettype]:
-                                    matrix[options.matrix][sourcetype][sourceid][targettype].append(targetid)
-                            except KeyError:
-                                if options.verbose:
-                                    print('\'' + sourcetype + '->' + sourceid + '\' cannot be linked to \'' +
-                                          targettype + '->' + targetid + '\' - deprecated/revoked entries?')
-                                pass
-                            try:
-                                if sourceid not in matrix[options.matrix][targettype][targetid][sourcetype]:
-                                    matrix[options.matrix][targettype][targetid][sourcetype].append(sourceid)
-                            except KeyError:
-                                if options.verbose:
-                                    print('\'' + targettype + '->' + targetid + '\' cannot be linked to \'' +
-                                          sourcetype + '->' + sourceid + '\' - deprecated/revoked entries?')
-                                pass
-    return matrix
-
-
 def GenerateMatrix(options):
-    if Matrices.get(options.matrix):
-        file, url = options.cachedir+'/'+Matrices[options.matrix]['file'], Matrices[options.matrix]['url']
+    merged = collections.defaultdict(lambda: dict())
+    for category in categories:
+        merged[category] = {}
+        merged[category]['UIDs'] = {}
+    for matrix in Matrices:
+        matrixfile = pathlib.Path(options.cachedir+'/'+Matrices[matrix]['file'])
+        if not matrixfile.exists():
+            # Missing ATT&CK matrix file
+            continue
+        matrixname = Matrices[matrix]['name']
+        matrixdescription = Matrices[matrix]['description']
+        matrixurl = Matrices[matrix]['url']
+        merged['Matrices'][matrix] = {'Metadata': {
+                'name': [matrixname],
+                'description': [matrixdescription],
+                'url': [matrixurl],
+        }}
+        with open(matrixfile, 'r') as f:
+            objects = json.loads(f.read())['objects']
+            try:
+                # Create all objects
+                for object in objects:
+                    if object['type'] in typemap:
+                        type = typemap[object['type']]
+                        objectnames = []
+                        objectdescriptions = []
+                        objecturls = []
+                        objectmetadata = {
+                            'names': objectnames,
+                            'descriptions': objectdescriptions,
+                            'urls': objecturls,
+                        }
+                        uid = object['id']
+                        mitreid = None
+                        revoked = False
+                        deprecated = False
+                        if 'description' in object:
+                            objectdescriptions.append(object['description'])
+                        if 'revoked' in object:
+                            revoked = object['revoked']
+                        if 'x_mitre_deprecated' in object:
+                            deprecated = object['x_mitre_deprecated']
+                        if 'external_references' in object:
+                            for external_reference in object['external_references']:
+                                if 'external_id' in external_reference:
+                                    if 'mitre' in external_reference['source_name']:
+                                        mitreid = external_reference['external_id']
+                                        if 'name' in object:
+                                            objectnames.append(object['name'])
+                                        if 'aliases' in object:
+                                            for alias in object['aliases']:
+                                                if alias not in objectnames:
+                                                    objectnames.append(alias)
+                                        if 'description' in object:
+                                            if object['description'] not in objectdescriptions:
+                                                objectdescriptions.append(object['description'])
+                                        if 'url' in external_reference:
+                                            objecturls.append(external_reference['url'])
+                        if revoked:
+                            objectdescriptions.append('Note: This MITRE ID has been **revoked** and should no longer be used.\n')
+                        if deprecated:
+                            objectdescriptions.append('Note: This MITRE ID has been **deprecated** and should no longer be used.\n')
+                        if not mitreid in merged[type]:
+                            merged[type][mitreid] = {}
+                        merged[type][mitreid]['Metadata'] = {
+                            'name': objectnames,
+                            'description': objectdescriptions,
+                            'url': objecturls,
+                        }
+                        # Add the matrix to the ID
+                        if 'Matrices' not in merged[type][mitreid]:
+                            merged[type][mitreid]['Matrices'] = {}
+                            if not matrix in merged[type][mitreid]['Matrices']:
+                                merged[type][mitreid]['Matrices'][matrix] = merged['Matrices'][matrix]['Metadata']
+                        # Add the UID to the list
+                        merged[type]['UIDs'][uid] = mitreid
+            except:
+                print("Failed to parse a JSON object:")
+                pprint.pprint(object)
+                raise
+    for matrix in Matrices:
+        matrixfile = pathlib.Path(options.cachedir+'/'+Matrices[matrix]['file'])
+        if not matrixfile.exists():
+            # Missing ATT&CK matrix file
+            continue
+        with open(matrixfile, 'r') as f:
+            objects = json.loads(f.read())['objects']
+        try:
+            # Create all relationships
+            for object in objects:
+                if not object['type'] in typemap:
+                    type = object['type']
+                    if type == 'relationship':
+                        try:
+                            sourceuid = object['source_ref']
+                            sourcemitretype = sourceuid.split('--')[0]
+                            targetuid = object['target_ref']
+                            targetmitretype = targetuid.split('--')[0]
+                            if sourcemitretype in typemap and targetmitretype in typemap:
+                                sourcetype = typemap[sourcemitretype]
+                                sourcemitreid = merged[sourcetype]['UIDs'][sourceuid]
+                                source = merged[sourcetype][sourcemitreid]
+                                targettype = typemap[targetmitretype]
+                                targetmitreid = merged[targettype]['UIDs'][targetuid]
+                                target = merged[targettype][targetmitreid]
+                                if not targettype in source:
+                                    source[targettype] = {}
+                                source[targettype][targetmitreid] = target['Metadata']
+                                if not sourcetype in target:
+                                    target[sourcetype] = {}
+                                target[sourcetype][sourcemitreid] = source['Metadata']
+                        except KeyError:
+                            print("Failed to build a relationship between:")
+                            #print(sourcetype+'/'+sourcemitreid,'->',targettype+'/'+targetmitreid)
+                            print(sourcemitreid)
+                            pprint.pprint(source)
+                            print(targetmitreid)
+                            pprint.pprint(target)
+                            raise
+        except:
+            print("Failed to parse JSON object:")
+            pprint.pprint(object)
+            raise
+    for category in categories:
+        del merged[category]['UIDs']
+    return merged
+
+def DownloadMatrices(options):
+    for matrix in Matrices:
+        file, url = options.cachedir+'/'+Matrices[matrix]['file'], Matrices[matrix]['url']
         jsonfile = pathlib.Path(file)
         if not jsonfile.exists() or options.force:
             try:
@@ -781,15 +424,6 @@ def GenerateMatrix(options):
                     shutil.copyfileobj(response, outfile)
             except urllib.error.HTTPError as e:
                 logging.error('Download of ' + url + ' failed: ' + e.reason)
-        with open(jsonfile, 'rb') as matrix:
-            # We have the file now, let's get to work
-            try:
-                logging.info('Parsing ' + file)
-                return(Transform(options, json.load(matrix)))
-            except json.JSONDecodeError:
-                logging.error(url + ' contains malformed JSON')
-    else:
-        logging.error('ATT&CK ' + options.matrix + ' has no definition in the configuration.')
 
 
 if __name__ == "__main__":
@@ -801,33 +435,12 @@ if __name__ == "__main__":
                                                  'provide an API or imported '
                                                  'as a module to provide a '
                                                  'Python dictionary.')
-    parser.add_argument('-t', '--matrix',
-                        dest='matrix',
-                        required=False,
-                        default=options.matrix,
-                        help='[optional] The ATT&CK Matrix to parse '
-                             '(default: ' + options.matrix + '). This is '
-                             'downloaded and locally cached afterwards.')
     parser.add_argument('-f', '--force',
                         dest='force',
                         action='store_true',
                         default=options.force,
-                        help='[optional] Redownload the matrix and overwrite '
+                        help='[optional] Redownload the matrices and overwrite '
                              'the cache file (clean run).')
-    parser.add_argument('--deprecated',
-                        required=False,
-                        action='store_true',
-                        default=options.deprecated,
-                        help='[optional] Should the parser include deprecated '
-                             'objects from the JSON into the matrix '
-                             '(default: ' + str(options.deprecated) + ').')
-    parser.add_argument('--revoked',
-                        required=False,
-                        action='store_true',
-                        default=options.revoked,
-                        help='[optional] Should the parser include revoked '
-                             'objects from the JSON into the matrix '
-                             '(default: ' + str(options.revoked) + ').')
     parser.add_argument('-d', '--daemonize',
                         dest='daemonize',
                         action='store_true',
@@ -866,37 +479,39 @@ if __name__ == "__main__":
                         default=options.logfile,
                         help='[optional] Logfile for log output (default: \'' +
                              options.logfile + '\')')
-    parser.add_argument('-c', '--cachedirr',
+    parser.add_argument('-m', '--cachedir',
                         dest='cachedir',
                         default=options.cachedir,
-                        help='[optional] Directory to write caches to (default: \'' +
+                        help='[optional] Directory for cache (default: \'' +
                              options.cachedir + '\')')
-    parser.add_argument('-a', '--cacheaffix',
-                        dest='cacheaffix',
-                        default=options.cacheaffix,
-                        help='[optional] Affix for cache file names (default: \'' +
-                             options.cacheaffix + '\')')
+    parser.add_argument('-c', '--cachefile',
+                        dest='cachefile',
+                        default=options.cachefile,
+                        help='[optional] Filename for cache (default: \'' +
+                             options.cachefile + '\')')
     options = parser.parse_args()
     logging.basicConfig(filename=options.logfile, level=logging.INFO)
+    cachefile = pathlib.Path(options.cachefile)
+    if options.force:
+        if options.verbose:
+            logging.info('Generating the cachefile: ' + cachefile.name)
+        DownloadMatrices(options)
+        cache = GenerateMatrix(options)
+        with open(cachefile, 'w') as cachefile:
+            json.dump(cache, cachefile)
     if not options.daemonize:
-        cachefile = pathlib.Path(options.cachedir.rstrip('/')+'/'+options.matrix+options.cacheaffix)
-        if not cachefile.exists() or options.force:
-            if options.verbose:
-                logging.info('Generating the cachefile ' + cachefile.name)
-            matrix = GenerateMatrix(options)
-            with open(cachefile, 'wb') as cache:
-                pickle.dump(matrix, cache, protocol=pickle.HIGHEST_PROTOCOL)
-        else:
-            if options.verbose:
-                logging.info('Loading the cachefile ' + cachefile.name)
-                matrices = loadCaches(options)
-                pprint.pprint(matrices[options.matrix])
-            else:
-                if cachefile.exists() and not options.force:
-                    print('The cachefile ' + cachefile.name + ' already exists, use the \'-f\' option to overwrite!')
-                else:
-                    parser.print_help()
+        parser.print_help()
     else:
+        if not cachefile.exists():
+            if options.verbose:
+                logging.info('Loading the cachefile: ' + cachefile.name)
+            DownloadMatrices(options)
+            cache = GenerateMatrix(options)
+            with open(cachefile, 'w') as cachefile:
+                json.dump(cache, cachefile)
+        else:
+            with open(cachefile, 'r') as cachefile:
+                cache = json.load(cachefile)
         try:
             port = int(options.port)
         except ValueError:
@@ -904,5 +519,5 @@ if __name__ == "__main__":
         uvicorn.run('attackmatrix:app', host=options.ip, port=options.port, log_level='info', reload=True)
 else:
     '''
-    Module import: generateMatrix() to get a Python dict
+    Module import: GenerateMatrix() to get a Python dict
     '''
