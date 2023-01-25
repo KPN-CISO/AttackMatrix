@@ -1,8 +1,28 @@
-# MITRE ATT&CK API
+# MITRE ATT&CK API 2.0
 
 ## Introduction
 
-AttackMatrix is a Python module and PHP script to interact with and explore MITRE's ATT&CK® matrices.
+AttackMatrix API is a Python module to interact with and explore MITRE's ATT&CK® matrices.
+
+## Changelog
+
+Version 2 improves on the original version:
+
+- Initial cache generation time is now *seconds*(!) instead of minutes.
+- Occasional 'overlap' bugs should be fixed.
+- Code has been greatly simplified/improved to simplify MITRE ATT&CK parsing and lay some groundwork for upcoming features.
+- All ATT&CK matrices are now merged into a single searchable tree, with presence in matrices noted in its `Matrices` property. Consequently, queries are now 'matrix-agnostic' and may yield more (interesting) results.
+- Tree structure is now consistent:
+  - `Metadata` list() field for names, descriptions, urls.
+  - First level results are already sensible MITRE entities.
+  - Subkey/-value pair levels are predictable: unfolded key/value pairs always reveal first-level relationships.
+
+## Notes
+
+- Webgrapher is currently broken. I may fix it at some point the future. Currently, [MatterBot](https://github.com/uforia/MatterBot) may be able to provide you with the necessary graphs as well.
+- Both **deprecated and 1.0 API** interfaces have been removed!
+- You will need to update your code if you are using the old API endpoints.
+- This is 'point-zero' release, so many bugs and edge-cases may pop up soon. Expect additional updates/patches!
 
 ## Licensing
 
@@ -20,32 +40,17 @@ AttackMatrix can be:
 - run as a daemon, providing an HTTP JSON API endpoint for querying;
 - run as a standalone script for generating a Python dict of a chosen matrix for use in other software.
 
-The API offers an endpoint where loaded matrices can be queried through multiple functions. The API will return a Python dict or JSON object, depending on the runtime variant. The following examples assume a 'daemonized' API instance:
+The API offers an endpoint where loaded matrices can be queried through multiple functions. The API will return a Python dict or JSON object, depending your runtime invocation. Visit the API endpoint's root '/' for automatic OpenAPI documentation.
 
-- exploration of the *Enterprise* ATT&CK matrix to find information about the *Actor* *G0005*:
-  -  http://.../api/explore/Enterprise/Actors/G0005
-- searching all entities with the words *dragon*, *capture* **or** *property* in the *Enterprise* and *ICS* ATT&CK® matrices:
-  - http://.../api/search/?params=dragon&params=capture&params=property&matrix=ICS&matrix=Enterprise
-- finding the overlapping TTPs (*Malwares, Mitigations, Subtechniques, Techniques and Tools*) for the *actors G0064* and *G0050*. Returns a list of *Actors*, a list of *matrices* they were  found in, and only the *TTPs* that overlapped (with their names/descriptions):
-  - http://.../api/actoroverlap/?actor1=G0064&actor2=G0050
-- finding all actors that have a specific set of TTPs (*Malwares, Subtechniques, Techniques and Tools*). The number of TTPs is variable, i.e.: *1 ... n* fields can be given.  Returns the matching *Actors* with all of their ATT&CK entity  types (including names/descriptions):
-  - http://.../api/ttpoverlap/?ttp=S0002&ttp=S0008&ttp=T1560.001
+## WebGrapher
 
-The WebGrapher offers the same functionality, but turns the JSON output from the API into a human-readable D3.js relationship diagram. The JSON examples above can be visualized as follows:
-
-- exploration of the *Enterprise* ATT&CK matrix to find information about the *Actor* *G0005*:
-  - [https://.../attackmap.php?q=explore&matrix=Enterprise&cat=Actors&id=G0005](https://www.valethosting.net/~penguin/attackmap/attackmap.php?q=explore&matrix=Enterprise&cat=Actors&id=G0005)
-- finding the overlapping TTPs (*Malwares, Mitigations, Subtechniques, Techniques and Tools*) for the *actors G0064* and *G0050*. Returns a list of *Actors*, a list of *matrices* they were  found in, and only the *TTPs* that overlapped (with their names/descriptions):
-  - [https://.../attackmap.php?q=actoroverlap&actor=G0064,G0050](https://www.valethosting.net/~penguin/attackmap/attackmap.php?q=actoroverlap&actor=G0064,G0050)
-- finding all actors that have a specific set of TTPs (*Malwares, Subtechniques, Techniques and Tools*). The number of TTPs is variable, i.e.: *1 ... n* fields can be given, separated by a comma (*this differs from the API endpoint call!)*.  Returns the matching *Actors* with all of their ATT&CK entity  types (including names/descriptions):
-  - [https://.../attackmap.php?q=ttpoverlap&ttp=S0002,S0008,T1560.001](https://www.valethosting.net/~penguin/attackmap/attackmap.php?q=ttpoverlap&ttp=S0002,S0008,T1560.001)
-- **Note:** searching is not yet implemented!
+The WebGrapher is currently broken and needs to be updated to use the new 2.0 interface.
 
 ## Requirements
 
 ### For the API
 
-1. `Python` 3.5+ (uses modern dictionary merging)
+1. `Python` 3.5+ (uses modern dictionary and `collections` features)
 2. `Uvicorn`
 3. `FastAPI`
 4. At least one MITRE ATT&CK® matrix
@@ -81,7 +86,7 @@ If you have ideas for improvements or general feedback, please reach out to the 
 
 ## Known issues
 
-Yes, I know the code could be cleaner and more efficient, particularly that horrendous mess of a PHP script. I'm not a professional webdeveloper, okay!? :-)
+The Webgrapher needs fixing. I'm not a professional webdeveloper, okay!? :-)
 
 ## Thanks
 
